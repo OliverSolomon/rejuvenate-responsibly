@@ -6,7 +6,7 @@ import { stats } from "@/lib/site";
 
 export function Intro() {
   return (
-    <Section tone="bone" className="py-24 sm:py-32">
+    <Section tone="bone" id="introduction" className="scroll-mt-24 py-24 sm:py-32">
       <Container size="wide">
         <div className="grid gap-14 lg:grid-cols-[0.85fr_1.15fr] lg:gap-20">
           <div className="flex flex-col gap-8">

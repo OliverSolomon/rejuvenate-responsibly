@@ -285,7 +285,9 @@ export function AssessmentFlow({
 
     return (
       <div className="mx-auto w-full max-w-2xl">
-        <div className="sticky top-0 z-10 -mx-5 -mt-28 bg-bone-100/92 px-5 pb-4 pt-24 backdrop-blur-md sm:-mx-8 sm:-mt-32 sm:px-8 sm:pt-28">
+        {/* Tucks just under the fixed site header, and stays opaque so answers
+            never read through it. */}
+        <div className="sticky top-14 z-10 -mx-5 border-b border-forest-900/8 bg-bone-100 px-5 pb-4 pt-5 sm:-mx-8 sm:px-8">
           <div className="mb-3 flex items-baseline justify-between gap-4">
             <p className="text-[0.8125rem] font-medium text-forest-900">{section.title}</p>
             <p className="text-[0.8125rem] tabular-nums text-forest-900/45">
