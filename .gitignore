@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local RMI submission store
+/.data
+
+# design reference screenshots, not part of the site
+/public/*.webp
+
+# but keep the documented example
+!.env.example
+
+# transfer archive, safe to delete
+rr-src.tar.gz

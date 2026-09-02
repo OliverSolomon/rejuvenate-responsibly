@@ -1,26 +1,170 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/* Rejuvenate Responsibly design tokens                              */
+/* Brand lime #97D700 taken from the master logo package.              */
+/* ------------------------------------------------------------------ */
+
+@theme {
+  /* Ground: warm bone paper, not pure white */
+  --color-bone-50: #fbfaf6;
+  --color-bone-100: #f4f2ea;
+  --color-bone-200: #eae7db;
+  --color-bone-300: #dcd8c8;
+
+  /* Ink: deep forest, used for panels and body copy */
+  --color-forest-950: #08170f;
+  --color-forest-900: #0d2418;
+  --color-forest-800: #143221;
+  --color-forest-700: #1d4630;
+  --color-forest-600: #2a6244;
+  --color-forest-500: #3d8760;
+
+  /* Brand lime */
+  --color-lime-50: #f5fce6;
+  --color-lime-100: #eff9d9;
+  --color-lime-200: #ddf3ac;
+  --color-lime-300: #c4e96f;
+  --color-lime-400: #aade31;
+  --color-lime-500: #97d700;
+  --color-lime-600: #7cb100;
+  --color-lime-700: #5d8500;
+
+  --color-clay-400: #c2703f;
+  --color-clay-500: #a85c30;
+
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), var(--font-body), ui-sans-serif, sans-serif;
+
+  --radius-card: 1.5rem;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --background: var(--color-bone-100);
+  --foreground: var(--color-forest-900);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  border-color: color-mix(in oklab, var(--color-forest-900) 10%, transparent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv01";
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-lime-300);
+  color: var(--color-forest-950);
+}
+
+/* Focus ring. One definition, used everywhere. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-forest-700);
+  outline-offset: 3px;
+  border-radius: 0.4rem;
+}
+
+.dark-panel :where(a, button, input, [tabindex]):focus-visible {
+  outline-color: var(--color-lime-400);
+}
+
+/* Display type: tight, optical, editorial */
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.eyebrow {
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Reveal-on-scroll primitive (progressive enhancement: visible by default) */
+@keyframes rr-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.reveal {
+  animation: rr-rise 0.7s var(--ease-out-soft) both;
+  animation-timeline: view();
+  animation-range: entry 0% entry 42%;
+}
+
+@supports not (animation-timeline: view()) {
+  .reveal {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+}
+
+/* Marquee */
+@keyframes rr-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  animation: rr-marquee 42s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* Paper grain. Keeps flat colour from going lifeless under large fills. */
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
+}
+
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+textarea::placeholder {
+  color: color-mix(in oklab, var(--color-forest-900) 40%, transparent);
 }
