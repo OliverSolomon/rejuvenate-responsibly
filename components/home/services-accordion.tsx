@@ -4,20 +4,13 @@ import { useState } from "react";
 import { Media } from "@/components/ui/media";
 import { services } from "@/lib/site";
 
-const art = [
-  "/images/data-dashboard.jpg",
-  "/images/boardroom.jpg",
-  "/images/community.jpg",
-  "/images/report-seal.jpg",
-  "/images/supply-chain.jpg",
-];
 
 export function ServicesAccordion() {
   const [open, setOpen] = useState<string | null>(services[1].slug);
 
   return (
     <ul className="mt-14 divide-y divide-bone-50/12 border-y border-bone-50/12">
-      {services.map((service, i) => {
+      {services.map((service) => {
         const isOpen = open === service.slug;
         return (
           <li key={service.slug} id={service.slug}>
@@ -54,9 +47,8 @@ export function ServicesAccordion() {
               className="grid gap-8 pb-10 sm:grid-cols-[0.8fr_1.2fr] sm:pl-14"
             >
               <Media
-                src={art[i]}
-                alt=""
-                swap="service photo"
+                src={service.image}
+                alt={service.imageAlt}
                 width={800}
                 height={600}
                 className="aspect-4/3 h-full"

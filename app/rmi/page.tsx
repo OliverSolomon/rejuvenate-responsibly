@@ -126,9 +126,8 @@ export default function RmiPage() {
         <Container size="wide">
           <div className="grid gap-14 lg:grid-cols-[1fr_1fr] lg:items-center lg:gap-20">
             <Media
-              src="/images/report-seal.jpg"
-              alt="Sample Rate My Impact report cover with the Issued by seal"
-              swap="report cover photo"
+              src="/images/plains-of-Africa.jpg"
+              alt="Acacia trees on open plains at dusk"
               width={1000}
               height={1000}
               className="aspect-square"

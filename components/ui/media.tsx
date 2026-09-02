@@ -3,27 +3,25 @@ import Image from "next/image";
 type Props = {
   src: string;
   alt: string;
-  /** Note shown in the corner so the team knows what photograph belongs here. */
-  swap?: string;
   className?: string;
   imgClassName?: string;
   priority?: boolean;
+  sizes?: string;
   width?: number;
   height?: number;
 };
 
 /**
- * Placeholder-aware media frame. The generated SVGs in /public/images are
- * stand-ins. Drop a real photograph at the same path (or point `src` at it)
- * and everything else keeps working.
+ * Standard image frame: rounded, clipped, with a slow lift on hover. The
+ * `className` sets the aspect ratio at each breakpoint and the image covers it.
  */
 export function Media({
   src,
   alt,
-  swap,
   className = "",
   imgClassName = "",
   priority = false,
+  sizes = "(min-width: 1024px) 50vw, 100vw",
   width = 1400,
   height = 1000,
 }: Props) {
@@ -38,14 +36,10 @@ export function Media({
         alt={alt}
         width={width}
         height={height}
+        sizes={sizes}
         priority={priority}
         className={`h-full w-full object-cover transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.035] ${imgClassName}`}
       />
-      {swap && (
-        <figcaption className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-forest-950/55 px-3 py-1.5 text-[0.6875rem] tracking-wide text-bone-50/85 backdrop-blur-sm">
-          Placeholder · {swap}
-        </figcaption>
-      )}
     </figure>
   );
 }

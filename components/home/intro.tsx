@@ -12,9 +12,8 @@ export function Intro() {
           <div className="flex flex-col gap-8">
             <Eyebrow>Introduction</Eyebrow>
             <Media
-              src="/images/advisory-session.jpg"
-              alt="Consultants working through a materiality assessment with a client team"
-              swap="advisory session photo"
+              src="/images/seedling.webp"
+              alt="Two hands cupping soil around a young seedling"
               width={1200}
               height={900}
               className="aspect-4/3"

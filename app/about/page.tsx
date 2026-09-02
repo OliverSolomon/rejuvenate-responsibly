@@ -33,9 +33,8 @@ export default function AboutPage() {
       <Section tone="bone" className="pb-24">
         <Container size="wide">
           <Media
-            src="/images/community.jpg"
-            alt="Community programme in East Africa"
-            swap="team or community photo"
+            src="/images/savannah.jpg"
+            alt="A lone acacia on the savannah at sunrise, with hills behind"
             width={1600}
             height={800}
             className="aspect-16/7"

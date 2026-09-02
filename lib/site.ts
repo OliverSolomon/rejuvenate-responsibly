@@ -32,6 +32,8 @@ export const stats = [
 export const services = [
   {
     slug: "sustainability-strategy",
+    image: "/images/solar-windfarm.png",
+    imageAlt: "Solar array and wind turbines sharing a single site",
     number: "01",
     title: "Sustainability Strategy Development",
     summary:
@@ -44,6 +46,8 @@ export const services = [
   },
   {
     slug: "esg-advisory",
+    image: "/images/windfarm.jpg",
+    imageAlt: "Wind turbines across farmland and woodland",
     number: "02",
     title: "ESG Advisory",
     summary:
@@ -56,6 +60,8 @@ export const services = [
   },
   {
     slug: "csr-programmes",
+    image: "/images/seychelles.jpg",
+    imageAlt: "Aerial view of a forested coastline and a moored sailing boat",
     number: "03",
     title: "CSR Programme Design & Implementation",
     summary:
@@ -68,6 +74,8 @@ export const services = [
   },
   {
     slug: "reporting-disclosure",
+    image: "/images/ship-portrait.jpg",
+    imageAlt: "Container ship seen head on, under way",
     number: "04",
     title: "Reporting & Disclosure",
     summary:
@@ -80,6 +88,8 @@ export const services = [
   },
   {
     slug: "sustainable-finance",
+    image: "/images/logistics.jpg",
+    imageAlt: "Aerial view of a loaded container ship escorted by a tug",
     number: "05",
     title: "Sustainable Finance & Investment",
     summary:

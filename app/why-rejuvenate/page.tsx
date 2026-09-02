@@ -59,9 +59,8 @@ export default function WhyPage() {
                 Diagnose, prioritise, build, prove
               </h2>
               <Media
-                src="/images/supply-chain.jpg"
-                alt="Supply chain assessment in progress"
-                swap="operations or site photo"
+                src="/images/ship.jpg"
+                alt="Container ships alongside gantry cranes at a working port"
                 width={1200}
                 height={800}
                 className="mt-auto aspect-3/2"

@@ -14,9 +14,8 @@ export function Why() {
               Advice you can put your name to
             </h2>
             <Media
-              src="/images/field-impact.jpg"
-              alt="Field-level environmental programme in East Africa"
-              swap="field / project photo"
+              src="/images/kisite.jpg"
+              alt="A fisherman lifting a woven basket trap from a boat off the Kenyan coast"
               width={1200}
               height={900}
               className="mt-auto aspect-4/3"

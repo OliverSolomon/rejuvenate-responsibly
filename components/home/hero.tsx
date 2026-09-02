@@ -6,20 +6,23 @@ export function Hero() {
     <section className="px-2 pt-2 sm:px-3 sm:pt-3">
       <div className="relative isolate overflow-hidden rounded-[1.75rem] bg-forest-900 sm:rounded-[2.25rem]">
         <Image
-          src="/images/hero-aerial.jpg"
+          src="/images/tigoni2-1-1.jpg"
           alt=""
           fill
           priority
           sizes="100vw"
           className="object-cover"
         />
+        {/* Two scrims: one lifts the copy off the photograph, one keeps the
+            top corners dark enough for the header to sit on. */}
         <div
           aria-hidden
-          className="absolute inset-0 bg-[linear-gradient(200deg,rgba(8,23,15,0.74)_0%,rgba(8,23,15,0.34)_44%,rgba(8,23,15,0.86)_100%)]"
+          className="absolute inset-0 bg-[linear-gradient(to_top,rgba(8,23,15,0.94)_0%,rgba(8,23,15,0.78)_28%,rgba(8,23,15,0.30)_58%,rgba(8,23,15,0.12)_78%,rgba(8,23,15,0.42)_100%)]"
         />
-        <p className="absolute bottom-3 left-4 z-10 rounded-full bg-forest-950/50 px-3 py-1.5 text-[0.6875rem] text-bone-50/70 backdrop-blur-sm">
-          Placeholder · aerial or site photograph
-        </p>
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-[radial-gradient(120%_90%_at_15%_100%,rgba(8,23,15,0.55)_0%,transparent_60%)]"
+        />
 
         <div className="dark-panel relative flex min-h-[88svh] flex-col justify-end px-5 pb-12 pt-36 sm:px-10 sm:pb-16 lg:px-14 lg:pb-20">
           <p className="eyebrow mb-8 flex items-center gap-2.5 text-bone-50/70">

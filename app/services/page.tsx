@@ -11,13 +11,6 @@ export const metadata: Metadata = {
     "Sustainability strategy, ESG advisory, CSR programme design, reporting and disclosure, and sustainable finance, from a Nairobi based consultancy.",
 };
 
-const art = [
-  "/images/data-dashboard.jpg",
-  "/images/boardroom.jpg",
-  "/images/community.jpg",
-  "/images/report-seal.jpg",
-  "/images/supply-chain.jpg",
-];
 
 export default function ServicesPage() {
   return (
@@ -38,7 +31,7 @@ export default function ServicesPage() {
       <Section tone="bone" className="pb-28">
         <Container size="wide">
           <div className="flex flex-col">
-            {services.map((service, i) => (
+            {services.map((service) => (
               <article
                 key={service.slug}
                 id={service.slug}
@@ -69,9 +62,8 @@ export default function ServicesPage() {
                 </div>
 
                 <Media
-                  src={art[i]}
-                  alt=""
-                  swap="service photo"
+                  src={service.image}
+                  alt={service.imageAlt}
                   width={800}
                   height={600}
                   className="aspect-4/3"
