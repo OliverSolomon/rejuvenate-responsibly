@@ -92,9 +92,10 @@ so nothing is ever a dead end.
    first paying client.
 3. **Email.** Set `RESEND_API_KEY`, or swap the `send` function in
    `lib/rmi/mailer.ts` for whichever provider the hosting partner prefers.
-4. **Images.** Everything in `public/images` is a generated placeholder, marked
-   as such on the page. Drop real photographs in at the same filenames and the
-   captions disappear on their own (remove the `swap` prop on `<Media>`).
+4. **Images.** `public/images` holds the site photography. Service artwork is
+   set per service in `lib/site.ts`; everything else is referenced directly by
+   the section that uses it. To swap a photograph, drop the new file in and
+   change the one `src`, then update its alt text to match.
 5. **Report generation.** Consolidating client and stakeholder answers into the
    letterhead report with the Issued by seal is still a manual step. The scoring
    and perception gap functions in `lib/rmi/scoring.ts` produce everything the
