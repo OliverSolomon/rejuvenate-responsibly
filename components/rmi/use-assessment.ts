@@ -24,7 +24,6 @@ type Persisted = {
   version: 1;
   profile: Profile;
   answers: Answers;
-  index: number;
   savedAt: string;
 };
 
@@ -69,14 +68,8 @@ export function useAssessment(audience: "client" | "stakeholder", storageKey: st
   const [answers, setAnswers] = useState<Answers>(
     () => readSaved(storageKey)?.answers ?? {},
   );
-  const [index, setIndexRaw] = useState(() => readSaved(storageKey)?.index ?? 0);
   const [dismissed, setDismissed] = useState(false);
   const firstSave = useRef(true);
-
-  const setIndex = useCallback(
-    (next: number) => setIndexRaw(Math.max(0, Math.min(questions.length - 1, next))),
-    [questions.length],
-  );
 
   const restoredAnswerCount = saved
     ? Object.values(saved.answers ?? {}).filter((a) => a.base !== null).length
@@ -98,7 +91,6 @@ export function useAssessment(audience: "client" | "stakeholder", storageKey: st
         version: 1,
         profile,
         answers,
-        index,
         savedAt: new Date().toISOString(),
       };
       window.localStorage.setItem(storageKey, JSON.stringify(payload));
@@ -106,7 +98,7 @@ export function useAssessment(audience: "client" | "stakeholder", storageKey: st
       // Quota exceeded or storage blocked. The form still works, it just
       // will not resume on a later visit.
     }
-  }, [profile, answers, index, storageKey]);
+  }, [profile, answers, storageKey]);
 
   const answeredCount = useMemo(
     () => questions.filter((q) => answers[q.id]?.base != null).length,
@@ -134,7 +126,6 @@ export function useAssessment(audience: "client" | "stakeholder", storageKey: st
       // nothing to clean up
     }
     setAnswers({});
-    setIndexRaw(0);
   }, [storageKey]);
 
   return {
@@ -144,8 +135,6 @@ export function useAssessment(audience: "client" | "stakeholder", storageKey: st
     answers,
     setBase,
     setFollowUp,
-    index,
-    setIndex,
     answeredCount,
     restored,
     dismissRestored: () => setDismissed(true),

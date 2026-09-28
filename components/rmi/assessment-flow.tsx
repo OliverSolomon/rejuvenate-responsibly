@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnswerToggle } from "./answer-toggle";
-import { ProgressRail } from "./progress-rail";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { QuestionRow } from "./question-row";
+import { SectionRail } from "./section-rail";
 import { ResultPanel } from "./result-panel";
 import { useAssessment } from "./use-assessment";
 import { Button } from "@/components/ui/button";
-import { SECTIONS, SECTION_ORDER, sectionById, type SectionId } from "@/lib/rmi/questions";
+import { SECTIONS, SECTION_ORDER, type SectionId } from "@/lib/rmi/questions";
 import { scoreAssessment } from "@/lib/rmi/scoring";
-
-type Stage = "intro" | "questions" | "review" | "done";
 
 const SECTORS = [
   "Financial services",
@@ -34,16 +32,18 @@ export function AssessmentFlow({
 }) {
   const storageKey = `rmi:${audience}:${reference ?? "default"}`;
   const a = useAssessment(audience, storageKey);
-  const [stage, setStage] = useState<Stage>("intro");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReturnType<typeof scoreAssessment> | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [confirmingGaps, setConfirmingGaps] = useState(false);
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("about-you");
 
-  const q = a.questions[a.index];
-  const answer = q ? a.answers[q.id] : undefined;
-  const needsFollowUp = Boolean(q?.followUp) && answer?.base === true;
-  const canAdvance = answer?.base != null && (!needsFollowUp || answer.followUp != null);
+  const profileComplete =
+    a.profile.organisation.trim().length > 1 &&
+    a.profile.contactName.trim().length > 1 &&
+    /.+@.+\..+/.test(a.profile.email);
 
   const counts = useMemo(() => {
     const out = {} as Record<SectionId, { answered: number; total: number }>;
@@ -57,73 +57,42 @@ export function AssessmentFlow({
     return out;
   }, [a.questions, a.answers]);
 
-  const goTo = useCallback(
-    (next: number) => {
-      a.setIndex(Math.max(0, Math.min(a.questions.length - 1, next)));
-      cardRef.current?.focus({ preventScroll: true });
-    },
-    [a],
+  const unanswered = useMemo(
+    () => a.questions.filter((q) => a.answers[q.id]?.base == null),
+    [a.questions, a.answers],
   );
 
-  const next = useCallback(() => {
-    if (a.index >= a.questions.length - 1) {
-      setStage("review");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    goTo(a.index + 1);
-  }, [a.index, a.questions.length, goTo]);
+  const pct = Math.round((a.answeredCount / a.questions.length) * 100);
 
-  /**
-   * Records an answer and moves on by itself. A "yes" with a follow-up waits
-   * on that follow-up; everything else advances after a beat, so nobody has to
-   * click twice to say the same thing.
-   */
-  const record = useCallback(
-    (value: boolean) => {
-      if (!q) return;
-      if (needsFollowUp) {
-        a.setFollowUp(q, value);
-      } else {
-        a.setBase(q, value);
-        if (value && q.followUp) return; // the follow-up is about to appear
-      }
-      window.setTimeout(next, 180);
-    },
-    [q, needsFollowUp, a, next],
-  );
-
-  // Keyboard shortcuts. Only while a question is on screen and focus is not in a field.
+  // Highlight whichever section is currently under the sticky header.
   useEffect(() => {
-    if (stage !== "questions" || !q) return;
-    const handler = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
-      const key = e.key.toLowerCase();
-      if (key === "y" || key === "1") {
-        record(true);
-        e.preventDefault();
-      } else if (key === "n" || key === "2") {
-        record(false);
-        e.preventDefault();
-      } else if (key === "enter" && canAdvance) {
-        next();
-        e.preventDefault();
-      } else if (key === "arrowleft" || (key === "backspace" && !el?.isContentEditable)) {
-        if (a.index > 0) {
-          goTo(a.index - 1);
-          e.preventDefault();
-        }
-      } else if (key === "arrowright" && canAdvance) {
-        next();
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [stage, q, canAdvance, a.index, record, next, goTo]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((x, y) => x.boundingClientRect.top - y.boundingClientRect.top)[0];
+        if (visible?.target.id) setActiveSection(visible.target.id);
+      },
+      { rootMargin: "-160px 0px -65% 0px", threshold: 0 },
+    );
+    const ids = ["about-you", ...SECTION_ORDER];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [a.hydrated]);
 
-  async function submit() {
+  const jumpToFirstOpen = useCallback(() => {
+    const first = unanswered[0];
+    if (!first) return;
+    setFlagOpen(true);
+    document
+      .getElementById(`q-${first.id}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [unanswered]);
+
+  const submit = useCallback(async () => {
     setSubmitting(true);
     setError(null);
     const scored = scoreAssessment(a.answers, audience);
@@ -147,15 +116,23 @@ export function AssessmentFlow({
       });
       if (!res.ok) throw new Error(await res.text());
     } catch {
-      // The score still stands locally. Tell the person plainly and let them retry.
+      // The score still stands locally. Say so plainly and let them retry.
       setError(
         "We scored your answers but could not reach the server. Your responses are saved on this device, so you can try submitting again.",
       );
     }
     setResult(scored);
-    setStage("done");
     setSubmitting(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [a.answers, a.profile, audience, reference]);
+
+  function attemptSubmit() {
+    if (unanswered.length > 0) {
+      setConfirmingGaps(true);
+      setFlagOpen(true);
+      return;
+    }
+    void submit();
   }
 
   if (!a.hydrated) {
@@ -166,366 +143,339 @@ export function AssessmentFlow({
     );
   }
 
-  /* ----------------------------- intro ----------------------------- */
-  if (stage === "intro") {
-    const profileReady =
-      a.profile.organisation.trim().length > 1 &&
-      a.profile.contactName.trim().length > 1 &&
-      /.+@.+\..+/.test(a.profile.email);
-
+  if (result) {
     return (
-      <div className="mx-auto w-full max-w-2xl">
+      <ResultPanel
+        audience={audience}
+        result={result}
+        profile={a.profile}
+        error={error}
+        onRetry={submit}
+      />
+    );
+  }
+
+  return (
+    <div>
+      {/* Sticky progress, tucked under the site header */}
+      <div className="sticky top-14 z-20 -mx-5 border-b border-forest-900/8 bg-bone-100 px-5 pb-3 pt-4 sm:-mx-8 sm:px-8">
+        <div className="mx-auto flex max-w-6xl items-baseline justify-between gap-4">
+          <p className="truncate text-[0.875rem] font-medium text-forest-900">
+            {activeSection === "about-you"
+              ? "About you"
+              : (SECTIONS.find((s) => s.id === activeSection)?.title ?? "Assessment")}
+          </p>
+          <p className="shrink-0 text-[0.8125rem] tabular-nums text-forest-900/50">
+            {a.answeredCount} of {a.questions.length} answered
+          </p>
+        </div>
+        <div className="mx-auto mt-2.5 h-1 max-w-6xl overflow-hidden rounded-full bg-forest-900/10">
+          <div
+            className="h-full rounded-full bg-forest-700 transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        {/* The side rail is desktop only, so small screens get the same jumps
+            as a scrollable row of chips. */}
+        <nav
+          aria-label="Jump to section"
+          className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-0.5 [scrollbar-width:none] sm:-mx-8 sm:px-8 lg:hidden"
+        >
+          {[
+            { id: "about-you", label: "About you", answered: profileComplete ? 1 : 0, total: 1 },
+            ...SECTIONS.map((sec) => ({
+              id: sec.id,
+              label: sec.short,
+              answered: counts[sec.id].answered,
+              total: counts[sec.id].total,
+            })),
+          ].map((chip) => (
+            <a
+              key={chip.id}
+              href={`#${chip.id}`}
+              aria-current={activeSection === chip.id ? "true" : undefined}
+              className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[0.75rem] transition-colors ${
+                activeSection === chip.id
+                  ? "border-forest-900 bg-forest-900 text-bone-50"
+                  : "border-forest-900/15 text-forest-900/65"
+              }`}
+            >
+              {chip.label}
+              <span
+                className={
+                  activeSection === chip.id ? "text-bone-50/60" : "text-forest-900/40"
+                }
+              >
+                {chip.answered}/{chip.total}
+              </span>
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <div className="mx-auto max-w-6xl">
         {a.restored && (
           <ResumeBanner
             at={a.restored.at}
             answered={a.restored.answered}
-            onResume={() => {
-              a.dismissRestored();
-              setStage("questions");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
             onDismiss={() => {
               a.clear();
               a.dismissRestored();
             }}
+            onKeep={a.dismissRestored}
           />
         )}
 
-        <p className="eyebrow text-forest-900/45">
-          {audience === "client" ? "Step 1 of 3" : "Stakeholder survey"}
-        </p>
-        <h1 className="display mt-4 text-[clamp(2rem,4.6vw,3rem)]">
-          {audience === "client"
-            ? "Tell us who is answering"
-            : "Before you start"}
-        </h1>
-        <p className="mt-4 text-[1.0625rem] leading-relaxed text-forest-900/65">
-          {audience === "client"
-            ? `${a.questions.length} yes or no questions across four pillars. Most people finish in about 15 minutes, and your answers save on this device as you go.`
-            : `${a.questions.length} yes or no questions about an organisation you work with. Your answers are reported in aggregate, never attributed to you by name.`}
-        </p>
-
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
-          <Field
-            label={audience === "client" ? "Organisation" : "Organisation you are rating"}
-            value={a.profile.organisation}
-            onChange={(v) => a.setProfile({ ...a.profile, organisation: v })}
-            autoComplete="organization"
-            required
-          />
-          <Field
-            label="Your name"
-            value={a.profile.contactName}
-            onChange={(v) => a.setProfile({ ...a.profile, contactName: v })}
-            autoComplete="name"
-            required
-          />
-          <Field
-            label="Work email"
-            type="email"
-            value={a.profile.email}
-            onChange={(v) => a.setProfile({ ...a.profile, email: v })}
-            autoComplete="email"
-            required
-          />
-          <Field
-            label={audience === "client" ? "Your role" : "Your relationship to them"}
-            value={a.profile.role}
-            onChange={(v) => a.setProfile({ ...a.profile, role: v })}
-            placeholder={audience === "client" ? "Head of Sustainability" : "Supplier, investor, community partner"}
-          />
-          <label className="flex flex-col gap-2 sm:col-span-2">
-            <span className="text-[0.8125rem] font-medium text-forest-900/70">Sector</span>
-            <select
-              value={a.profile.sector}
-              onChange={(e) => a.setProfile({ ...a.profile, sector: e.target.value })}
-              className="h-12 rounded-xl border border-forest-900/15 bg-bone-50 px-4 text-[0.9375rem] text-forest-900"
-            >
-              <option value="">Select a sector</option>
-              {SECTORS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-10 flex flex-wrap items-center gap-4">
-          <Button
-            variant="primary"
-            size="lg"
-            arrow
-            disabled={!profileReady}
-            onClick={() => {
-              setStage("questions");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            Start the assessment
-          </Button>
-          {!profileReady && (
-            <p className="text-[0.8125rem] text-forest-900/45">
-              Organisation, name and a valid email get you in.
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  /* --------------------------- questions --------------------------- */
-  if (stage === "questions" && q) {
-    const section = sectionById(q.section);
-    const positionInSection = a.questions
-      .filter((x) => x.section === q.section)
-      .findIndex((x) => x.id === q.id);
-    const sectionTotal = counts[q.section].total;
-    const isFirstOfSection = positionInSection === 0;
-
-    return (
-      <div className="mx-auto w-full max-w-2xl">
-        {/* Tucks just under the fixed site header, and stays opaque so answers
-            never read through it. */}
-        <div className="sticky top-14 z-10 -mx-5 border-b border-forest-900/8 bg-bone-100 px-5 pb-4 pt-5 sm:-mx-8 sm:px-8">
-          <div className="mb-3 flex items-baseline justify-between gap-4">
-            <p className="text-[0.8125rem] font-medium text-forest-900">{section.title}</p>
-            <p className="text-[0.8125rem] tabular-nums text-forest-900/45">
-              {a.answeredCount} of {a.questions.length} answered
-            </p>
-          </div>
-          <ProgressRail current={q.section} counts={counts} />
-        </div>
-
-        {isFirstOfSection && (
-          <div className="mt-8 rounded-card border border-forest-900/10 bg-bone-50 p-6">
-            <p className="eyebrow text-forest-900/45">
-              Pillar {SECTION_ORDER.indexOf(q.section) + 1} of 4
-            </p>
-            <h2 className="display mt-3 text-2xl">{section.title}</h2>
-            <p className="mt-2 text-[0.9375rem] leading-relaxed text-forest-900/60">
-              {section.blurb}
-            </p>
-          </div>
-        )}
-
-        <div
-          ref={cardRef}
-          tabIndex={-1}
-          key={q.id}
-          className="mt-8 outline-none"
-          aria-live="polite"
-        >
-          <p className="text-[0.8125rem] text-forest-900/45">
-            {q.topic} · question {positionInSection + 1} of {sectionTotal}
+        <header className="mt-10">
+          <p className="eyebrow text-forest-900/45">
+            {audience === "client"
+              ? "Rate My Impact · Sustainability Self-Assessment 2026"
+              : "Rate My Impact · Stakeholder survey"}
           </p>
-          <h2 className="display mt-4 text-[clamp(1.5rem,3.4vw,2.15rem)] leading-[1.12]">
-            {q.question}
-          </h2>
+          <h1 className="display mt-4 text-[clamp(2rem,4.6vw,3rem)]">
+            {audience === "client"
+              ? "Your sustainability self-assessment"
+              : "A short survey about an organisation you work with"}
+          </h1>
+          <p className="mt-4 max-w-[58ch] text-[1.0625rem] leading-relaxed text-forest-900/65">
+            {audience === "client"
+              ? `${a.questions.length} yes or no questions across four pillars, all on this one page. Answer them in any order, hand a pillar to a colleague, and come back whenever you like. Everything saves on this device as you go.`
+              : `${a.questions.length} yes or no questions, all on this one page. Answer them in any order. Your responses are reported in aggregate and never attributed to you by name.`}
+          </p>
+        </header>
 
-          <div className="mt-8">
-            <AnswerToggle
-              name={q.question}
-              value={answer?.base ?? null}
-              onChange={record}
+        <div className="mt-12 grid gap-12 lg:grid-cols-[15rem_1fr] lg:gap-14">
+          <aside className="hidden lg:block">
+            <SectionRail
+              counts={counts}
+              active={activeSection}
+              profileComplete={profileComplete}
             />
-          </div>
+          </aside>
 
-          {needsFollowUp && q.followUp && (
-            <div className="mt-6 rounded-2xl border border-forest-900/12 bg-lime-50 p-5 sm:p-6">
-              <p className="eyebrow text-forest-700">Going one level deeper</p>
-              <p className="mt-3 text-[1.0625rem] leading-snug text-forest-900">{q.followUp}</p>
-              <div className="mt-5">
-                <AnswerToggle
-                  name={q.followUp}
-                  size="sm"
-                  value={answer?.followUp ?? null}
-                  onChange={record}
+          <div>
+            {/* ---------------------------- about you ---------------------------- */}
+            <section id="about-you" className="scroll-mt-36">
+              <SectionHeading
+                index="00"
+                title="About you"
+                blurb="So we know whose report this is and where to send it."
+              />
+              <div className="mt-7 grid gap-5 rounded-card border border-forest-900/10 bg-bone-50 p-5 sm:grid-cols-2 sm:p-7">
+                <Field
+                  label={audience === "client" ? "Organisation" : "Organisation you are rating"}
+                  value={a.profile.organisation}
+                  onChange={(v) => a.setProfile({ ...a.profile, organisation: v })}
+                  autoComplete="organization"
+                  required
                 />
+                <Field
+                  label="Your name"
+                  value={a.profile.contactName}
+                  onChange={(v) => a.setProfile({ ...a.profile, contactName: v })}
+                  autoComplete="name"
+                  required
+                />
+                <Field
+                  label="Work email"
+                  type="email"
+                  value={a.profile.email}
+                  onChange={(v) => a.setProfile({ ...a.profile, email: v })}
+                  autoComplete="email"
+                  required
+                />
+                <Field
+                  label={audience === "client" ? "Your role" : "Your relationship to them"}
+                  value={a.profile.role}
+                  onChange={(v) => a.setProfile({ ...a.profile, role: v })}
+                  placeholder={
+                    audience === "client"
+                      ? "Head of Sustainability"
+                      : "Supplier, investor, community partner"
+                  }
+                />
+                <label className="flex flex-col gap-2 sm:col-span-2">
+                  <span className="text-[0.8125rem] font-medium text-forest-900/70">Sector</span>
+                  <select
+                    value={a.profile.sector}
+                    onChange={(e) => a.setProfile({ ...a.profile, sector: e.target.value })}
+                    className="h-12 rounded-xl border border-forest-900/15 bg-bone-100 px-4 text-[0.9375rem] text-forest-900"
+                  >
+                    <option value="">Select a sector</option>
+                    {SECTORS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            </div>
-          )}
+            </section>
 
-          {(q.sdg || q.gri) && (
-            <p className="mt-6 flex flex-wrap gap-2 text-[0.75rem] text-forest-900/40">
-              {q.sdg && q.sdg !== "N/A" && (
-                <span className="rounded-full bg-forest-900/6 px-2.5 py-1">{q.sdg}</span>
-              )}
-              {q.gri && q.gri !== "N/A" && (
-                <span className="rounded-full bg-forest-900/6 px-2.5 py-1">{q.gri}</span>
-              )}
-            </p>
-          )}
-        </div>
+            {/* ----------------------------- pillars ----------------------------- */}
+            {SECTIONS.map((section, sectionIndex) => {
+              const qs = a.questions.filter((q) => q.section === section.id);
+              const c = counts[section.id];
+              return (
+                <section
+                  key={section.id}
+                  id={section.id}
+                  className="mt-16 scroll-mt-36"
+                >
+                  <SectionHeading
+                    index={String(sectionIndex + 1).padStart(2, "0")}
+                    title={section.title}
+                    blurb={section.blurb}
+                    meta={`${c.answered} of ${c.total} answered`}
+                  />
+                  <ol className="mt-7 overflow-hidden rounded-card border border-forest-900/10 bg-bone-50">
+                    {qs.map((question, i) => (
+                      <QuestionRow
+                        key={question.id}
+                        question={question}
+                        number={i + 1}
+                        answer={a.answers[question.id]}
+                        onBase={(v) => a.setBase(question, v)}
+                        onFollowUp={(v) => a.setFollowUp(question, v)}
+                        flagged={flagOpen && a.answers[question.id]?.base == null}
+                      />
+                    ))}
+                  </ol>
+                </section>
+              );
+            })}
 
-        <div className="mt-10 flex items-center justify-between gap-4 border-t border-forest-900/10 pt-6">
-          <button
-            type="button"
-            onClick={() => goTo(a.index - 1)}
-            disabled={a.index === 0}
-            className="text-[0.875rem] text-forest-900/55 transition-colors hover:text-forest-900 disabled:opacity-30"
-          >
-            Back
-          </button>
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={next}
-              className="text-[0.875rem] text-forest-900/45 transition-colors hover:text-forest-900"
-            >
-              {answer?.base == null ? "Skip for now" : "Next"}
-            </button>
-            <Button variant="primary" size="sm" onClick={() => setStage("review")}>
-              Review all
-            </Button>
+            {/* ------------------------------ submit ----------------------------- */}
+            <section className="mt-16 rounded-card border border-forest-900/10 bg-bone-50 p-6 sm:p-9">
+              <h2 className="display text-2xl">
+                {unanswered.length === 0 ? "That is everything" : "Ready when you are"}
+              </h2>
+              <p className="mt-3 max-w-[54ch] text-[0.9375rem] leading-relaxed text-forest-900/65">
+                {unanswered.length === 0
+                  ? "Every question has an answer. Submit and we will score it straight away."
+                  : `${unanswered.length} ${
+                      unanswered.length === 1 ? "question is" : "questions are"
+                    } still open. You can submit without them, but each one counts as a no in the score.`}
+              </p>
+
+              {!profileComplete && (
+                <p className="mt-5 rounded-2xl border border-clay-400/30 bg-clay-400/8 p-4 text-[0.875rem] text-clay-500">
+                  Add your organisation, your name and a valid email in the first section
+                  before submitting.
+                </p>
+              )}
+
+              {error && (
+                <p className="mt-5 rounded-2xl border border-clay-400/30 bg-clay-400/8 p-4 text-[0.875rem] text-clay-500">
+                  {error}
+                </p>
+              )}
+
+              {confirmingGaps && unanswered.length > 0 ? (
+                <div className="mt-6 rounded-2xl border border-forest-900/12 bg-lime-50 p-5">
+                  <p className="text-[0.9375rem] text-forest-900">
+                    {unanswered.length}{" "}
+                    {unanswered.length === 1 ? "question is" : "questions are"} unanswered
+                    and will be scored as a no. Submit anyway?
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={() => void submit()}
+                      disabled={submitting || !profileComplete}
+                    >
+                      {submitting ? "Submitting..." : "Submit anyway"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      onClick={() => {
+                        setConfirmingGaps(false);
+                        jumpToFirstOpen();
+                      }}
+                    >
+                      Take me to them
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-7 flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    arrow
+                    onClick={attemptSubmit}
+                    disabled={submitting || !profileComplete}
+                  >
+                    {submitting ? "Submitting..." : "Submit and see my score"}
+                  </Button>
+                  {unanswered.length > 0 && (
+                    <Button variant="ghost" size="lg" onClick={jumpToFirstOpen}>
+                      Jump to the first open question
+                    </Button>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         </div>
-
-        <p className="mt-5 hidden text-[0.75rem] text-forest-900/35 sm:block">
-          Keyboard: Y or N to answer, arrow keys to move, Enter to continue.
-        </p>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  /* ---------------------------- review ----------------------------- */
-  if (stage === "review") {
-    const unanswered = a.questions.filter((x) => a.answers[x.id]?.base == null);
-    return (
-      <div className="mx-auto w-full max-w-3xl">
-        <p className="eyebrow text-forest-900/45">Almost there</p>
-        <h1 className="display mt-4 text-[clamp(2rem,4.6vw,3rem)]">Review your answers</h1>
-        <p className="mt-4 max-w-[52ch] text-[1.0625rem] leading-relaxed text-forest-900/65">
-          {unanswered.length === 0
-            ? "Every question has an answer. Change anything you want before you submit."
-            : `${unanswered.length} ${unanswered.length === 1 ? "question is" : "questions are"} still open. You can submit without them, but they count as a no in the score.`}
-        </p>
-
-        {unanswered.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              const i = a.questions.findIndex((x) => x.id === unanswered[0].id);
-              a.setIndex(i);
-              setStage("questions");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            className="mt-6 inline-flex items-center gap-2 rounded-full border border-forest-900/20 px-4 py-2 text-[0.875rem] transition-colors hover:border-forest-900/45"
-          >
-            Jump to the first open question
-          </button>
-        )}
-
-        <div className="mt-12 flex flex-col gap-10">
-          {SECTIONS.map((s) => {
-            const qs = a.questions.filter((x) => x.section === s.id);
-            return (
-              <div key={s.id}>
-                <h2 className="display text-xl">{s.title}</h2>
-                <ul className="mt-4 divide-y divide-forest-900/8 border-y border-forest-900/8">
-                  {qs.map((question) => {
-                    const ans = a.answers[question.id];
-                    const i = a.questions.findIndex((x) => x.id === question.id);
-                    return (
-                      <li key={question.id} className="flex items-start gap-4 py-3.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            a.setIndex(i);
-                            setStage("questions");
-                            window.scrollTo({ top: 0, behavior: "smooth" });
-                          }}
-                          className="flex-1 text-left text-[0.9375rem] leading-snug text-forest-900/75 transition-colors hover:text-forest-900"
-                        >
-                          <span className="font-medium text-forest-900">{question.topic}</span>
-                          <span className="block text-[0.8125rem] text-forest-900/45">
-                            {question.question}
-                          </span>
-                        </button>
-                        <span
-                          className={`mt-0.5 shrink-0 rounded-full px-3 py-1 text-[0.75rem] font-medium ${
-                            ans?.base === true
-                              ? "bg-lime-100 text-forest-700"
-                              : ans?.base === false
-                                ? "bg-forest-900/8 text-forest-900/60"
-                                : "bg-clay-400/12 text-clay-500"
-                          }`}
-                        >
-                          {ans?.base === true
-                            ? ans.followUp
-                              ? "Yes + depth"
-                              : "Yes"
-                            : ans?.base === false
-                              ? "No"
-                              : "Open"}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-
-        {error && (
-          <p className="mt-8 rounded-2xl border border-clay-400/30 bg-clay-400/8 p-4 text-[0.875rem] text-clay-500">
-            {error}
-          </p>
-        )}
-
-        <div className="mt-12 flex flex-wrap gap-3">
-          <Button variant="primary" size="lg" arrow onClick={submit} disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit and see my score"}
-          </Button>
-          <Button
-            variant="ghost"
-            size="lg"
-            onClick={() => {
-              setStage("questions");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            Keep editing
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  /* ----------------------------- done ------------------------------ */
+function SectionHeading({
+  index,
+  title,
+  blurb,
+  meta,
+}: {
+  index: string;
+  title: string;
+  blurb: string;
+  meta?: string;
+}) {
   return (
-    <ResultPanel
-      audience={audience}
-      result={result!}
-      profile={a.profile}
-      error={error}
-      onRetry={submit}
-    />
+    <div className="border-t border-forest-900/12 pt-6">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="font-[family-name:var(--font-serif)] text-xl text-forest-900/30">
+          {index}
+        </span>
+        {meta && (
+          <span className="text-[0.8125rem] tabular-nums text-forest-900/45">{meta}</span>
+        )}
+      </div>
+      <h2 className="display mt-2 text-[clamp(1.5rem,3vw,2.15rem)]">{title}</h2>
+      <p className="mt-2.5 max-w-[56ch] text-[0.9375rem] leading-relaxed text-forest-900/60">
+        {blurb}
+      </p>
+    </div>
   );
 }
 
 function ResumeBanner({
   at,
   answered,
-  onResume,
+  onKeep,
   onDismiss,
 }: {
   at: string;
   answered: number;
-  onResume: () => void;
+  onKeep: () => void;
   onDismiss: () => void;
 }) {
   const when = new Date(at);
   return (
-    <div className="mb-10 flex flex-col gap-4 rounded-card border border-forest-900/12 bg-lime-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mt-8 flex flex-col gap-4 rounded-card border border-forest-900/12 bg-lime-50 p-5 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-[0.9375rem] text-forest-900/75">
-        You have {answered} {answered === 1 ? "answer" : "answers"} saved from{" "}
+        Picked up {answered} {answered === 1 ? "answer" : "answers"} you saved on{" "}
         {when.toLocaleDateString(undefined, { day: "numeric", month: "long" })}.
       </p>
       <div className="flex gap-2">
-        <Button variant="primary" size="sm" onClick={onResume}>
-          Pick up where I left off
+        <Button variant="primary" size="sm" onClick={onKeep}>
+          Keep them
         </Button>
         <Button variant="ghost" size="sm" onClick={onDismiss}>
           Start fresh
@@ -565,7 +515,7 @@ function Field({
         placeholder={placeholder}
         autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
-        className="h-12 rounded-xl border border-forest-900/15 bg-bone-50 px-4 text-[0.9375rem] text-forest-900 transition-colors focus:border-forest-900/40"
+        className="h-12 rounded-xl border border-forest-900/15 bg-bone-100 px-4 text-[0.9375rem] text-forest-900 transition-colors focus:border-forest-900/40"
       />
     </label>
   );
