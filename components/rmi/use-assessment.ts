@@ -13,7 +13,13 @@ export type Profile = {
   sector: string;
 };
 
-export type Session = { id: string; token: string; resumeUrl: string };
+export type Session = {
+  id: string;
+  token: string;
+  resumeUrl: string;
+  /** False when no mail provider is configured and nothing was actually sent. */
+  emailed: boolean;
+};
 
 const EMPTY_PROFILE: Profile = {
   organisation: "",
@@ -122,7 +128,8 @@ export function useAssessment(
         if (cancelled) return;
         setProfile({ ...EMPTY_PROFILE, ...data.profile });
         setAnswers(data.answers ?? {});
-        setSession({ id: data.id, token: data.token, resumeUrl: data.resumeUrl });
+        // They arrived on an emailed link, so delivery plainly works.
+        setSession({ id: data.id, token: data.token, resumeUrl: data.resumeUrl, emailed: true });
       } catch (err) {
         if (!cancelled) {
           setResumeError(err instanceof Error ? err.message : "We could not open that assessment.");
@@ -166,7 +173,12 @@ export function useAssessment(
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? "Could not start the assessment.");
-        const next: Session = { id: data.id, token: data.token, resumeUrl: data.resumeUrl };
+        const next: Session = {
+          id: data.id,
+          token: data.token,
+          resumeUrl: data.resumeUrl,
+          emailed: Boolean(data.emailed),
+        };
         setSession(next);
         return next;
       } catch {

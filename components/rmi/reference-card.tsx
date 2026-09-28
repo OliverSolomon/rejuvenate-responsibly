@@ -45,8 +45,18 @@ export function ReferenceCard({
                 {session.id}
               </p>
               <p className="mt-2 max-w-[52ch] text-[0.875rem] leading-relaxed text-forest-900/60">
-                We have emailed this to you with a link back in. Keep the link somewhere
-                safe: anyone holding it can open your answers.
+                {session.emailed ? (
+                  <>
+                    We have emailed this to you with a link back in. Keep the link
+                    somewhere safe: anyone holding it can open your answers.
+                  </>
+                ) : (
+                  <>
+                    Copy your link now and keep it somewhere safe. We could not email it,
+                    and without it there is no way back to these answers. Anyone holding
+                    it can open them, so treat it like a password.
+                  </>
+                )}
               </p>
             </>
           ) : (
@@ -82,7 +92,11 @@ export function ReferenceCard({
 
       {session && (
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={copy}>
+          <Button
+            variant={session.emailed ? "ghost" : "primary"}
+            size="sm"
+            onClick={copy}
+          >
             {copied ? "Link copied" : "Copy my link"}
           </Button>
           {confirming ? (

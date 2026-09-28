@@ -35,7 +35,11 @@ export function PayButton({ tier, featured }: { tier: Tier; featured: boolean })
       try {
         window.localStorage.setItem(
           "rmi:last",
-          JSON.stringify({ id: assessment.id, token: assessment.token }),
+          JSON.stringify({
+            id: assessment.id,
+            token: assessment.token,
+            emailed: Boolean(assessment.emailed),
+          }),
         );
       } catch {
         // Private mode. The emailed link still gets them back in.
