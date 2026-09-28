@@ -17,23 +17,23 @@ export const metadata: Metadata = {
 const steps = [
   {
     n: "01",
-    title: "Pay and get your link",
-    body: "Choose a tier and pay through Pesapal. We email your assessment link straight after, along with the glossary of terms.",
+    title: "Pay and get your reference",
+    body: "Choose a tier, pay, and we open your assessment. Your reference and a link back into it land in your inbox before you have finished reading this.",
   },
   {
     n: "02",
     title: "Answer 53 questions",
-    body: "Yes or no, one at a time, with a follow up when the answer is yes. It saves as you go, so you can hand a pillar to a colleague.",
+    body: "All 53 on one page, in any order. Each saves the moment you answer it, so you can stop, hand a pillar to a colleague and pick it up from your link later.",
   },
   {
     n: "03",
-    title: "Name three to five stakeholders",
-    body: "Suppliers, investors, community partners, regulators. They get a shorter 40 question survey about the same practices.",
+    title: "Share it with the other parties",
+    body: "Add up to five people who see you from the outside. Each gets a shorter 40 question survey about the same practices.",
   },
   {
     n: "04",
     title: "Receive your report",
-    body: "Both views are consolidated into a scored report on letterhead, carrying an Issued by seal, with a gap analysis and roadmap.",
+    body: "Both views go into a scored report on letterhead with the Issued by seal, covering each pillar, the gaps and what to do about them.",
   },
 ];
 
@@ -173,8 +173,8 @@ export default function RmiPage() {
               Choose how far you want to go
             </h2>
             <p className="max-w-[52ch] text-[1.0625rem] leading-relaxed text-forest-900/65">
-              Payment runs through Pesapal. Your assessment link arrives by email as soon
-              as the payment clears.
+              Pay by card or mobile money. Your reference is emailed to you as soon as the
+              assessment opens, so you can always get back to it.
             </p>
           </div>
           <PricingCards />

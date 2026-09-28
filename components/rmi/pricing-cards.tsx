@@ -1,5 +1,6 @@
-import { checkoutUrl, pricing } from "@/lib/rmi/pricing";
+import { pricing } from "@/lib/rmi/pricing";
 import { ButtonLink } from "@/components/ui/button";
+import { PayButton } from "./pay-button";
 
 export function PricingCards() {
   return (
@@ -77,13 +78,7 @@ export function PricingCards() {
                   Start a conversation
                 </ButtonLink>
               ) : (
-                <ButtonLink
-                  href={checkoutUrl(tier.id)}
-                  variant={featured ? "lime" : "primary"}
-                  size="lg"
-                >
-                  Pay with Pesapal
-                </ButtonLink>
+                <PayButton tier={tier} featured={Boolean(featured)} />
               )}
             </div>
           </div>

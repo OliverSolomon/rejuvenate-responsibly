@@ -1,24 +1,55 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ScoreDial } from "./score-dial";
-import { Button, ButtonLink } from "@/components/ui/button";
+import { ShareStep } from "./share-step";
+import { Button } from "@/components/ui/button";
 import type { ScoreResult } from "@/lib/rmi/scoring";
-import type { Profile } from "./use-assessment";
+import type { Profile, Session } from "./use-assessment";
 
 export function ResultPanel({
   result,
   profile,
   audience,
+  session,
   error,
   onRetry,
 }: {
   result: ScoreResult;
   profile: Profile;
   audience: "client" | "stakeholder";
+  session: Session | null;
   error: string | null;
   onRetry: () => void;
 }) {
+  const router = useRouter();
+  const [report, setReport] = useState<{ state: "idle" | "working" | "done" | "failed"; message?: string }>({
+    state: "idle",
+  });
+
+  async function generate() {
+    if (!session) return;
+    setReport({ state: "working" });
+    try {
+      const res = await fetch("/api/rmi/report", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: session.id, token: session.token }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "The report could not be generated.");
+      setReport({ state: "done" });
+      router.push(`/rmi/report?id=${session.id}&t=${session.token}`);
+    } catch (err) {
+      setReport({
+        state: "failed",
+        message: err instanceof Error ? err.message : "The report could not be generated.",
+      });
+    }
+  }
+
   if (!result) return null;
 
   return (
@@ -145,26 +176,52 @@ export function ResultPanel({
           )}
 
           <div className="mt-16 rounded-card bg-forest-900 p-7 text-bone-100 sm:p-10 dark-panel">
-            <p className="eyebrow text-bone-100/45">Step 2 of 3</p>
+            <p className="eyebrow text-bone-100/45">Next</p>
             <h2 className="display mt-3 text-[clamp(1.5rem,3vw,2.2rem)] text-bone-50">
-              Now bring in your stakeholders
+              Share it with the other parties
             </h2>
-            <p className="mt-4 max-w-[52ch] text-[0.9375rem] leading-relaxed text-bone-100/65">
-              Add between three and five people who see your operations from the outside.
-              They answer a shorter 40 question survey, and the difference between their
-              view and yours becomes the most quoted page of your report.
+            <div className="mt-6">
+              <ShareStep session={session} />
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-card border border-forest-900/12 bg-bone-50 p-7 sm:p-9">
+            <h2 className="display text-[clamp(1.4rem,2.6vw,1.9rem)]">Your report</h2>
+            <p className="mt-3 max-w-[54ch] text-[0.9375rem] leading-relaxed text-forest-900/65">
+              We consolidate your answers and the stakeholder responses into a written
+              report on letterhead, carrying the Issued by seal. Generate it now to see a
+              draft, or wait until your stakeholders have answered so the gap analysis has
+              something to compare against.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <ButtonLink href="/rmi/stakeholders" variant="lime" size="lg">
-                Add my stakeholders
-              </ButtonLink>
+
+            {report.state === "failed" && (
+              <p className="mt-5 rounded-2xl border border-clay-400/30 bg-clay-400/8 p-4 text-[0.875rem] text-clay-500">
+                {report.message}
+              </p>
+            )}
+
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <Button
+                variant="primary"
+                size="lg"
+                arrow
+                onClick={generate}
+                disabled={!session || report.state === "working"}
+              >
+                {report.state === "working" ? "Writing your report..." : "Generate my report"}
+              </Button>
               <Link
                 href="/contact"
-                className="inline-flex h-13 items-center rounded-full border border-bone-50/25 px-6 text-[0.9375rem] text-bone-50 transition-colors hover:border-lime-500"
+                className="text-[0.875rem] text-forest-900/60 underline-offset-4 hover:underline"
               >
                 Talk to a consultant first
               </Link>
             </div>
+            {report.state === "working" && (
+              <p className="mt-4 text-[0.8125rem] text-forest-900/45">
+                This takes up to a minute. Leave the tab open.
+              </p>
+            )}
           </div>
         </>
       )}

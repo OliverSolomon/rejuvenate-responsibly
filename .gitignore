@@ -49,5 +49,8 @@ next-env.d.ts
 # but keep the documented example
 !.env.example
 
-# transfer archive, safe to delete
-rr-src.tar.gz
+# transfer archives, safe to delete
+rr-*.tar.gz
+
+# files the desktop app drops here
+/Claude outputs/

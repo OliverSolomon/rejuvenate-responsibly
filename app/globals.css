@@ -168,3 +168,86 @@ input[type="email"]::placeholder,
 textarea::placeholder {
   color: color-mix(in oklab, var(--color-forest-900) 40%, transparent);
 }
+
+/* ------------------------------------------------------------------ */
+/* Generated report body                                               */
+/* ------------------------------------------------------------------ */
+
+.report-body h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3.4vw, 2.4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.report-body h2 {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in oklab, var(--color-forest-900) 12%, transparent);
+}
+
+.report-body h3 {
+  font-size: 1.0625rem;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--color-forest-900) 70%, transparent);
+  margin-top: 0.75rem;
+}
+
+.report-body p {
+  margin-top: 0.9rem;
+  line-height: 1.7;
+  color: color-mix(in oklab, var(--color-forest-900) 78%, transparent);
+}
+
+.report-body ul,
+.report-body ol {
+  margin-top: 0.9rem;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: color-mix(in oklab, var(--color-forest-900) 78%, transparent);
+  line-height: 1.6;
+}
+
+.report-body ul { list-style: disc; }
+.report-body ol { list-style: decimal; }
+
+.report-body table {
+  width: 100%;
+  margin-top: 1.25rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.report-body th {
+  text-align: left;
+  font-weight: 500;
+  padding: 0.65rem 0.75rem 0.65rem 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-forest-900) 22%, transparent);
+  color: var(--color-forest-900);
+}
+
+.report-body td {
+  padding: 0.7rem 0.75rem 0.7rem 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-forest-900) 9%, transparent);
+  vertical-align: top;
+  color: color-mix(in oklab, var(--color-forest-900) 75%, transparent);
+}
+
+.report-body hr {
+  margin-top: 2rem;
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, var(--color-forest-900) 12%, transparent);
+}
+
+.report-body strong { font-weight: 600; color: var(--color-forest-900); }
+
+@media print {
+  .report-body h2 { break-after: avoid; }
+  .report-body table { break-inside: avoid; }
+}

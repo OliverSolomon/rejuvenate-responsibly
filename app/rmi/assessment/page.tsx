@@ -11,13 +11,21 @@ export const metadata: Metadata = {
 
 export default async function AssessmentPage({ searchParams }: PageProps<"/rmi/assessment">) {
   const params = await searchParams;
-  const raw = params?.ref;
-  const reference = typeof raw === "string" ? raw : undefined;
+  const pick = (k: string) => {
+    const v = params?.[k];
+    return typeof v === "string" ? v : undefined;
+  };
+
+  const id = pick("id");
+  const token = pick("t");
 
   return (
     <div className="bg-bone-100 pt-28 pb-28 sm:pt-32">
       <Container size="default">
-        <AssessmentFlow audience="client" reference={reference} />
+        <AssessmentFlow
+          audience="client"
+          resumeWith={id && token ? { id, token } : undefined}
+        />
       </Container>
     </div>
   );

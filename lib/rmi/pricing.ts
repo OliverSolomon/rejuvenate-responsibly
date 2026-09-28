@@ -2,6 +2,8 @@ export type Tier = {
   id: string;
   name: string;
   price: string;
+  /** What we charge. null means the tier is quoted, not sold online. */
+  amount: number | null;
   currency: string;
   cadence: string;
   summary: string;
@@ -10,14 +12,15 @@ export type Tier = {
 };
 
 /**
- * Pesapal is the payment gateway. Set NEXT_PUBLIC_PESAPAL_URL_<ID> per tier,
- * or a single NEXT_PUBLIC_PESAPAL_URL fallback, and the buttons point at it.
+ * Payment runs through Pesapal, opened server side by /api/rmi/pay. The amount
+ * below is what gets charged, so keep it in step with the display price.
  */
 export const pricing: Tier[] = [
   {
     id: "essential",
     name: "Essential",
     price: "35,000",
+    amount: 35000,
     currency: "KES",
     cadence: "one assessment",
     summary:
@@ -34,6 +37,7 @@ export const pricing: Tier[] = [
     id: "professional",
     name: "Professional",
     price: "85,000",
+    amount: 85000,
     currency: "KES",
     cadence: "one assessment",
     featured: true,
@@ -52,6 +56,7 @@ export const pricing: Tier[] = [
     id: "enterprise",
     name: "Enterprise",
     price: "Talk to us",
+    amount: null,
     currency: "",
     cadence: "annual programme",
     summary:
@@ -66,8 +71,3 @@ export const pricing: Tier[] = [
   },
 ];
 
-export function checkoutUrl(tierId: string): string {
-  const specific = process.env[`NEXT_PUBLIC_PESAPAL_URL_${tierId.toUpperCase()}`];
-  const fallback = process.env.NEXT_PUBLIC_PESAPAL_URL;
-  return specific ?? fallback ?? "/contact?intent=rmi";
-}

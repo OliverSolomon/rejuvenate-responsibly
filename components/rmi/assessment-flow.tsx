@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { QuestionRow } from "./question-row";
 import { SectionRail } from "./section-rail";
 import { ResultPanel } from "./result-panel";
 import { useAssessment } from "./use-assessment";
+import { ReferenceCard } from "./reference-card";
 import { Button } from "@/components/ui/button";
 import { SECTIONS, SECTION_ORDER, type SectionId } from "@/lib/rmi/questions";
 import { scoreAssessment } from "@/lib/rmi/scoring";
@@ -26,12 +28,15 @@ const SECTORS = [
 export function AssessmentFlow({
   audience = "client",
   reference,
+  resumeWith,
 }: {
   audience?: "client" | "stakeholder";
   reference?: string;
+  resumeWith?: { id: string; token: string };
 }) {
+  const router = useRouter();
   const storageKey = `rmi:${audience}:${reference ?? "default"}`;
-  const a = useAssessment(audience, storageKey);
+  const a = useAssessment(audience, storageKey, resumeWith);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,25 +101,44 @@ export function AssessmentFlow({
     setSubmitting(true);
     setError(null);
     const scored = scoreAssessment(a.answers, audience);
+    const score = {
+      overall: scored.overall,
+      coverage: scored.coverage,
+      depth: scored.depth,
+      tier: scored.tier.name,
+      sections: scored.sections.map((s) => ({ id: s.id, score: s.score })),
+    };
+
     try {
-      const res = await fetch("/api/rmi/assessment", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          audience,
-          reference: reference ?? null,
-          profile: a.profile,
-          answers: a.answers,
-          score: {
-            overall: scored.overall,
-            coverage: scored.coverage,
-            depth: scored.depth,
-            tier: scored.tier.name,
-            sections: scored.sections.map((s) => ({ id: s.id, score: s.score })),
-          },
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      if (audience === "stakeholder") {
+        const res = await fetch("/api/rmi/share", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            token: reference,
+            answers: a.answers,
+            name: a.profile.contactName,
+            relationship: a.profile.role,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+      } else {
+        const session = a.session ?? (await a.ensureSession());
+        if (!session) throw new Error("no session");
+        const res = await fetch("/api/rmi/assessment", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: session.id,
+            token: session.token,
+            profile: a.profile,
+            answers: a.answers,
+            score,
+            submit: true,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+      }
     } catch {
       // The score still stands locally. Say so plainly and let them retry.
       setError(
@@ -124,7 +148,7 @@ export function AssessmentFlow({
     setResult(scored);
     setSubmitting(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [a.answers, a.profile, audience, reference]);
+  }, [a, audience, reference]);
 
   function attemptSubmit() {
     if (unanswered.length > 0) {
@@ -135,10 +159,26 @@ export function AssessmentFlow({
     void submit();
   }
 
-  if (!a.hydrated) {
+  if (!a.hydrated || a.resuming) {
     return (
       <div className="grid min-h-[40vh] place-items-center text-forest-900/45">
-        <p className="text-sm">Loading your assessment...</p>
+        <p className="text-sm">{a.resuming ? "Opening your assessment..." : "Loading..."}</p>
+      </div>
+    );
+  }
+
+  if (a.resumeError) {
+    return (
+      <div className="mx-auto max-w-xl py-16">
+        <h1 className="display text-3xl">We could not open that assessment</h1>
+        <p className="mt-4 text-[1.0625rem] leading-relaxed text-forest-900/65">
+          {a.resumeError} Check the link in your email, or enter your reference again.
+        </p>
+        <div className="mt-8">
+          <Button variant="primary" size="lg" arrow onClick={() => router.push("/rmi/resume")}>
+            Enter my reference
+          </Button>
+        </div>
       </div>
     );
   }
@@ -149,6 +189,7 @@ export function AssessmentFlow({
         audience={audience}
         result={result}
         profile={a.profile}
+        session={a.session}
         error={error}
         onRetry={submit}
       />
@@ -220,7 +261,7 @@ export function AssessmentFlow({
             at={a.restored.at}
             answered={a.restored.answered}
             onDismiss={() => {
-              a.clear();
+              void a.clearAll();
               a.dismissRestored();
             }}
             onKeep={a.dismissRestored}
@@ -240,10 +281,14 @@ export function AssessmentFlow({
           </h1>
           <p className="mt-4 max-w-[58ch] text-[1.0625rem] leading-relaxed text-forest-900/65">
             {audience === "client"
-              ? `${a.questions.length} yes or no questions across four pillars, all on this one page. Answer them in any order, hand a pillar to a colleague, and come back whenever you like. Everything saves on this device as you go.`
+              ? `${a.questions.length} yes or no questions across four pillars, all on this one page. Answer them in any order and every answer saves as you give it. We email you a reference and a link, so you can stop whenever and pick it up from any device.`
               : `${a.questions.length} yes or no questions, all on this one page. Answer them in any order. Your responses are reported in aggregate and never attributed to you by name.`}
           </p>
         </header>
+
+        {audience === "client" && (
+          <ReferenceCard session={a.session} sync={a.sync} onClear={a.clearAll} />
+        )}
 
         <div className="mt-12 grid gap-12 lg:grid-cols-[15rem_1fr] lg:gap-14">
           <aside className="hidden lg:block">

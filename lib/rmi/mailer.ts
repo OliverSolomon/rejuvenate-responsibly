@@ -1,18 +1,15 @@
 /**
- * Outbound email. Until an SMTP or API key is configured, this logs the message
- * so the rest of the flow can be exercised end to end. Wire up whichever
- * provider the hosting partner prefers by filling in `send`.
+ * Outbound email. Until a provider key is configured this logs the message so
+ * the rest of the flow can be exercised end to end. Swap the body of `send`
+ * for whichever provider the hosting partner prefers.
  */
 
-export type Mail = {
-  to: string;
-  subject: string;
-  text: string;
-};
+export type Mail = { to: string; subject: string; text: string };
 
 export async function send(mail: Mail): Promise<{ ok: boolean; queued: boolean }> {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.RMI_MAIL_FROM ?? "Rate My Impact <no-reply@rejuvenateresponsibly.com>";
+  const from =
+    process.env.RMI_MAIL_FROM ?? "Rate My Impact <no-reply@rejuvenateresponsibly.com>";
 
   if (!key) {
     console.info("[rmi:mail] no provider configured, message not sent", {
@@ -24,35 +21,35 @@ export async function send(mail: Mail): Promise<{ ok: boolean; queued: boolean }
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-    },
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
     body: JSON.stringify({ from, to: mail.to, subject: mail.subject, text: mail.text }),
   });
 
   return { ok: res.ok, queued: res.ok };
 }
 
-export function stakeholderInviteEmail(opts: {
+export function assessmentAccessEmail(opts: {
   organisation: string;
-  invitedBy: string;
+  code: string;
   link: string;
 }): { subject: string; text: string } {
   return {
-    subject: `Rate My Impact: a short survey about ${opts.organisation}`,
+    subject: `Your Rate My Impact assessment: ${opts.code}`,
     text: [
-      "Dear Participant,",
+      "Hello,",
       "",
-      `${opts.invitedBy} has asked for your view as part of the Rate My Impact Sustainability Self-Assessment 2026.`,
+      `Your Rate My Impact assessment for ${opts.organisation} is open, and this is the reference you will need to get back into it.`,
       "",
-      `The survey covers 40 yes or no questions about ${opts.organisation} across governance, economic, environmental and social practice. It takes about 10 minutes, and your answers are reported in aggregate rather than attributed to you by name.`,
+      `Assessment ID: ${opts.code}`,
+      `Your link: ${opts.link}`,
       "",
-      `Complete the survey here: ${opts.link}`,
+      "Keep that link. It is the only way back to your answers, and anyone holding it can see them, so treat it like a password.",
       "",
-      "A glossary of the terms used is available on the first screen if you need it.",
+      "Your answers save as you go, on the server and in the browser you started in. You can close the tab, hand a pillar to a colleague and come back whenever suits.",
       "",
-      "Thank you for your time and transparency.",
+      "Once you submit, you will be asked to add the people who see your operations from the outside. They each get a shorter survey, and both sets of answers go into your report.",
+      "",
+      "Reply to this email if anything gets in the way.",
       "",
       "The RMI Sustainability Team",
       "Rejuvenate Responsibly",
@@ -60,21 +57,21 @@ export function stakeholderInviteEmail(opts: {
   };
 }
 
-export function clientAccessEmail(opts: { organisation: string; link: string }) {
+export function shareInviteEmail(opts: { link: string }): { subject: string; text: string } {
   return {
-    subject: "Your Rate My Impact assessment is ready",
+    subject: "A short survey about an organisation you work with",
     text: [
-      "Dear Participant,",
+      "Hello,",
       "",
-      "Thank you for your payment. The Rate My Impact Sustainability Self-Assessment 2026 is now open for you.",
+      "You have been asked for your view as part of the Rate My Impact Sustainability Self-Assessment 2026.",
       "",
-      `Start here: ${opts.link}`,
+      "It is 40 yes or no questions about governance, economic, environmental and social practice. Most people finish in about ten minutes. Your answers are reported alongside the other respondents and are never attributed to you by name.",
       "",
-      `The assessment covers 53 questions across four pillars and takes about 15 minutes. Your answers save as you go, so you can hand a section to a colleague and come back to it.`,
+      `Your survey: ${opts.link}`,
       "",
-      `Once you have finished, you will be asked to add between three and five stakeholders. They receive their own short survey, and both sets of answers are consolidated into your report for ${opts.organisation}.`,
+      "The first screen links to a glossary if any of the terms need pinning down.",
       "",
-      "If you hit any trouble, reply to this email and we will help.",
+      "Thank you for the time.",
       "",
       "The RMI Sustainability Team",
       "Rejuvenate Responsibly",

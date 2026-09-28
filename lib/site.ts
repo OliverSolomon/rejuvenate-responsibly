@@ -170,7 +170,7 @@ export const approachSteps = [
 export const faqs = [
   {
     q: "How long does the Rate My Impact assessment take?",
-    a: "Most clients finish the 53-question self-assessment in 15 to 20 minutes. It saves as you go, so you can hand a section to a colleague and come back to it later.",
+    a: "Most clients finish the 53 questions in 15 to 20 minutes. Every answer saves as you give it, and you get a reference and a link by email, so you can stop whenever and come back from any device.",
   },
   {
     q: "Why do you also survey our stakeholders?",
@@ -183,6 +183,10 @@ export const faqs = [
   {
     q: "Which frameworks does the scoring map to?",
     a: "Every indicator is mapped to the relevant UN SDG and GRI disclosure, and the report is structured against the NSE Kenya ESG Disclosure Manual.",
+  },
+  {
+    q: "What if we need to start over?",
+    a: "There is a clear all responses button on the assessment itself. It wipes every answer and keeps your reference, so the link in your inbox still works.",
   },
   {
     q: "Is our data confidential?",
