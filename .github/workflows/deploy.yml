@@ -1,4 +1,3 @@
-
 name: Deploy Rejuvenate Responsibly
 
 on:
@@ -11,12 +10,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: rejuvenate-production
-  cancel-in-progress: false
+  group: rejuvenate-responsibly-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    name: Build and Deploy
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -33,84 +33,163 @@ jobs:
 
       - name: Build Next.js application
         run: npm run build
+        env:
+          NODE_ENV: production
 
       - name: Prepare standalone deployment
         run: |
-          test -f .next/standalone/server.js || {
-            echo "Standalone output missing. Set output: standalone in next.config."
+          set -eu
+
+          if [ ! -f .next/standalone/server.js ]; then
+            echo "ERROR: .next/standalone/server.js is missing."
+            echo "Check that next.config.ts includes output: 'standalone'."
+            find .next -maxdepth 4 -name server.js -print || true
             exit 1
-          }
-
-          mkdir -p .next/standalone/.next
-          cp -a .next/static .next/standalone/.next/static
-
-          if [ -d public ]; then
-            cp -a public .next/standalone/public
           fi
 
-      - name: Configure SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          mkdir -p .next/standalone/.next/static
 
-      - name: Verify SSH connection
+          if [ -d .next/static ]; then
+            cp -a .next/static/. .next/standalone/.next/static/
+          fi
+
+          if [ -d public ]; then
+            mkdir -p .next/standalone/public
+            cp -a public/. .next/standalone/public/
+          fi
+
+          test -f .next/standalone/server.js
+
+      - name: Configure SSH
         env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
-          ssh -p 693 \
-            -o StrictHostKeyChecking=accept-new \
-            -o ConnectTimeout=15 \
-            deployer@"$SSH_HOST" "whoami"
+          set -eu
+
+          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$SSH_HOST" ]; then
+            echo "ERROR: Configure SSH_HOST and SSH_PRIVATE_KEY in GitHub repository secrets."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null
+
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $SSH_HOST
+            User deployer
+            Port 693
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
+          EOF
+
+          chmod 600 ~/.ssh/config
+
+      - name: Verify server prerequisites
+        run: |
+          set -eu
+
+          ssh production '
+            set -eu
+            command -v docker >/dev/null || {
+              echo "ERROR: Docker is not installed on the server."
+              exit 1
+            }
+            docker info >/dev/null
+            test -d /var/www/rejuvenateresponsibly.com/app
+            test -f /etc/rejuvenateresponsibly.env || {
+              echo "ERROR: /etc/rejuvenateresponsibly.env is missing."
+              exit 1
+            }
+          '
 
       - name: Upload standalone application
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
-          ssh -p 693 \
-            -o StrictHostKeyChecking=accept-new \
-            deployer@"$SSH_HOST" \
-            "mkdir -p /var/www/rejuvenateresponsibly.com/app"
+          set -eu
 
           rsync -az --delete \
-            -e "ssh -p 693 -o StrictHostKeyChecking=accept-new" \
+            -e "ssh -F ~/.ssh/config" \
             .next/standalone/ \
-            deployer@"$SSH_HOST":/var/www/rejuvenateresponsibly.com/app/
+            production:/var/www/rejuvenateresponsibly.com/app/
 
-      - name: Restart Next.js container
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+      - name: Deploy Docker container
         run: |
-          ssh -p 693 \
-            -o StrictHostKeyChecking=accept-new \
-            deployer@"$SSH_HOST" '
-              set -eu
+          set -eu
 
-              APP=/var/www/rejuvenateresponsibly.com/app
+          ssh production 'bash -s' <<'REMOTE'
+          set -eu
 
-              docker pull node:22-bookworm-slim
+          APP_DIR="/var/www/rejuvenateresponsibly.com/app"
+          CONTAINER="rejuvenateresponsibly"
+          IMAGE="node:22-bookworm-slim"
 
-              docker rm -f rejuvenateresponsibly 2>/dev/null || true
+          cd "$APP_DIR"
+          test -f server.js
 
-              docker run -d \
-                --name rejuvenateresponsibly \
-                --restart unless-stopped \
-                -p 127.0.0.1:3000:3000 \
-                --env-file /etc/rejuvenateresponsibly.env \
-                -e NODE_ENV=production \
-                -e PORT=3000 \
-                -e HOSTNAME=0.0.0.0 \
-                -v "$APP:/app" \
-                -w /app \
-                node:22-bookworm-slim \
-                node server.js
+          docker pull "$IMAGE"
+
+          # Replace the existing container.
+          docker rm -f "$CONTAINER" 2>/dev/null || true
+
+          docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            --init \
+            --env-file /etc/rejuvenateresponsibly.env \
+            -e NODE_ENV=production \
+            -e PORT=3000 \
+            -e HOSTNAME=0.0.0.0 \
+            -p 127.0.0.1:3000:3000 \
+            -v "$APP_DIR:/app" \
+            -w /app \
+            "$IMAGE" \
+            node server.js
+
+          sleep 5
+
+          if ! docker inspect -f '{{.State.Running}}' "$CONTAINER" | grep -qx true; then
+            echo "ERROR: Application container did not stay running."
+            docker logs --tail 100 "$CONTAINER" || true
+            exit 1
+          fi
+
+          echo "Deployment container is running."
+          docker ps --filter "name=$CONTAINER"
+          REMOTE
+
+      - name: Verify application response
+        run: |
+          set -eu
+
+          ssh production '
+            set -eu
+
+            for attempt in $(seq 1 12); do
+              if curl --fail --silent --show-error \
+                http://127.0.0.1:3000/ \
+                -o /dev/null; then
+                echo "Application is responding successfully."
+                exit 0
+              fi
 
               sleep 5
+            done
 
-              docker inspect \
-                --format="{{.State.Status}}" \
-                rejuvenateresponsibly
+            echo "ERROR: Application did not respond on port 3000."
+            docker logs --tail 100 rejuvenateresponsibly
+            exit 1
+          '
 
-              curl --fail --silent --show-error \
-                http://127.0.0.1:3000/ \
-                -o /dev/null
-            '
+      - name: Clean up SSH credentials
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key ~/.ssh/config
