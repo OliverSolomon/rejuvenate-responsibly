@@ -22,52 +22,95 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js application
+        run: npm run build
+
+      - name: Prepare standalone deployment
+        run: |
+          test -f .next/standalone/server.js || {
+            echo "Standalone output missing. Set output: standalone in next.config."
+            exit 1
+          }
+
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/static
+
+          if [ -d public ]; then
+            cp -a public .next/standalone/public
+          fi
+
       - name: Configure SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Verify server connection
+      - name: Verify SSH connection
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           ssh -p 693 \
             -o StrictHostKeyChecking=accept-new \
             -o ConnectTimeout=15 \
+            deployer@"$SSH_HOST" "whoami"
+
+      - name: Upload standalone application
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh -p 693 \
+            -o StrictHostKeyChecking=accept-new \
             deployer@"$SSH_HOST" \
-            "whoami"
+            "mkdir -p /var/www/rejuvenateresponsibly.com/app"
 
-      - name: Upload application
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-        run: |
-          rsync -az \
-            -e "ssh -p 693 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15" \
-            --exclude='.git/' \
-            --exclude='node_modules/' \
-            --exclude='.next/' \
-            --exclude='.env' \
-            --exclude='.env.*' \
-            --exclude='!.env.example' \
-            ./ deployer@"$SSH_HOST":/var/www/rejuvenateresponsibly.com/app/
+          rsync -az --delete \
+            -e "ssh -p 693 -o StrictHostKeyChecking=accept-new" \
+            .next/standalone/ \
+            deployer@"$SSH_HOST":/var/www/rejuvenateresponsibly.com/app/
 
-      - name: Build and restart application
+      - name: Restart Next.js container
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
         run: |
           ssh -p 693 \
             -o StrictHostKeyChecking=accept-new \
-            -o ConnectTimeout=15 \
             deployer@"$SSH_HOST" '
               set -eu
-              cd /var/www/rejuvenateresponsibly.com/app
 
-              npm ci
-              npm run build
+              APP=/var/www/rejuvenateresponsibly.com/app
 
-              sudo /usr/bin/systemctl restart rejuvenateresponsibly.service
+              docker pull node:22-bookworm-slim
 
-              sleep 3
+              docker rm -f rejuvenateresponsibly 2>/dev/null || true
 
-              sudo /usr/bin/systemctl is-active --quiet rejuvenateresponsibly.service
+              docker run -d \
+                --name rejuvenateresponsibly \
+                --restart unless-stopped \
+                -p 127.0.0.1:3000:3000 \
+                --env-file /etc/rejuvenateresponsibly.env \
+                -e NODE_ENV=production \
+                -e PORT=3000 \
+                -e HOSTNAME=0.0.0.0 \
+                -v "$APP:/app" \
+                -w /app \
+                node:22-bookworm-slim \
+                node server.js
+
+              sleep 5
+
+              docker inspect \
+                --format="{{.State.Status}}" \
+                rejuvenateresponsibly
+
+              curl --fail --silent --show-error \
+                http://127.0.0.1:3000/ \
+                -o /dev/null
             '
