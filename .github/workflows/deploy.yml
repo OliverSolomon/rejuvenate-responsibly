@@ -1,0 +1,73 @@
+
+name: Deploy Rejuvenate Responsibly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rejuvenate-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Verify server connection
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh -p 693 \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=15 \
+            deployer@"$SSH_HOST" \
+            "whoami"
+
+      - name: Upload application
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          rsync -az \
+            -e "ssh -p 693 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15" \
+            --exclude='.git/' \
+            --exclude='node_modules/' \
+            --exclude='.next/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='!.env.example' \
+            ./ deployer@"$SSH_HOST":/var/www/rejuvenateresponsibly.com/app/
+
+      - name: Build and restart application
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          ssh -p 693 \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=15 \
+            deployer@"$SSH_HOST" '
+              set -eu
+              cd /var/www/rejuvenateresponsibly.com/app
+
+              npm ci
+              npm run build
+
+              sudo /usr/bin/systemctl restart rejuvenateresponsibly.service
+
+              sleep 3
+
+              sudo /usr/bin/systemctl is-active --quiet rejuvenateresponsibly.service
+            '
