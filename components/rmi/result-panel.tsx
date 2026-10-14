@@ -188,10 +188,10 @@ export function ResultPanel({
           <div className="mt-6 rounded-card border border-forest-900/12 bg-bone-50 p-7 sm:p-9">
             <h2 className="display text-[clamp(1.4rem,2.6vw,1.9rem)]">Your report</h2>
             <p className="mt-3 max-w-[54ch] text-[0.9375rem] leading-relaxed text-forest-900/65">
-              We consolidate your answers and the stakeholder responses into a written
-              report on letterhead, carrying the Issued by seal. Generate it now to see a
-              draft, or wait until your stakeholders have answered so the gap analysis has
-              something to compare against.
+              Your report is written on its own once the last stakeholder has answered,
+              and we email you the link. You do not have to wait here for it. Generate one
+              now if you want to see where things stand, though with responses still
+              outstanding the gap analysis has nothing to compare against yet.
             </p>
 
             {report.state === "failed" && (
@@ -208,7 +208,7 @@ export function ResultPanel({
                 onClick={generate}
                 disabled={!session || report.state === "working"}
               >
-                {report.state === "working" ? "Writing your report..." : "Generate my report"}
+                {report.state === "working" ? "Writing your report..." : "Generate a draft now"}
               </Button>
               <Link
                 href="/contact"

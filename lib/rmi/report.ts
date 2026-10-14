@@ -231,9 +231,27 @@ export async function generateReport(
   return { markdown: scrub(markdown), model };
 }
 
-/** Last line of defence against the tells the prompt already asks it to avoid. */
+/**
+ * Last line of defence against the tells the prompt already asks it to avoid.
+ * Asking nicely gets most of the way; these are the ones that still come back,
+ * so they get rewritten rather than requested. Every substitution below keeps
+ * the same grammatical role, so nothing it touches can end up malformed.
+ */
+const PHRASES: [RegExp, string][] = [
+  [/\bsustainability journey\b/gi, "sustainability programme"],
+  [/\b(its|their|the|this|your|our) journey\b/gi, "$1 progress"],
+  [/\bjourney toward(s)?\b/gi, "progress toward$1"],
+  [/\bindicating\b/g, "showing"],
+  [/\bIndicating\b/g, "Showing"],
+  [/\bunderscoring\b/gi, "showing"],
+  [/\bhighlighting\b/gi, "showing"],
+  [/\bshowcasing\b/gi, "showing"],
+  [/\breflecting a\b/gi, "showing a"],
+  [/\breflecting the\b/gi, "showing the"],
+];
+
 function scrub(text: string): string {
-  return text
+  let out = text
     .replace(/—/g, ", ")
     .replace(/–/g, "-")
     .replace(/[‘’]/g, "'")
@@ -242,4 +260,7 @@ function scrub(text: string): string {
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}️]/gu, "")
     .replace(/[ \t]+$/gm, "")
     .trim();
+
+  for (const [pattern, replacement] of PHRASES) out = out.replace(pattern, replacement);
+  return out;
 }

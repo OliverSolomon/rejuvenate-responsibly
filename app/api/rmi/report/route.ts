@@ -6,6 +6,8 @@ import {
   setReport,
 } from "@/lib/rmi/store";
 import { generateReport, reportConfigured } from "@/lib/rmi/report";
+import { reportReadyEmail, send } from "@/lib/rmi/mailer";
+import { siteUrl } from "@/lib/rmi/urls";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -65,6 +67,19 @@ export async function POST(request: Request) {
     const generated = await generateReport(assessment, stakeholders);
     const report = { ...generated, generatedAt: new Date().toISOString() };
     await setReport(assessment.id, report);
+
+    // Put the link in their inbox too, so the report is not trapped behind
+    // whichever tab happened to be open when they pressed the button.
+    await send({
+      to: assessment.profile.email,
+      ...reportReadyEmail({
+        organisation: assessment.profile.organisation,
+        code: assessment.id,
+        link: `${siteUrl()}/rmi/report?id=${assessment.id}&t=${assessment.token}`,
+        respondents: stakeholders.length,
+      }),
+    }).catch(() => undefined);
+
     return NextResponse.json(report, { status: 201 });
   } catch (err) {
     console.error("[rmi:report] generation failed", err);

@@ -1,10 +1,25 @@
-import { NextResponse } from "next/server";
-import { addShares, findShare, normaliseCode, saveStakeholderResponse } from "@/lib/rmi/store";
-import { send, shareInviteEmail } from "@/lib/rmi/mailer";
+import { after, NextResponse } from "next/server";
+import {
+  addShares,
+  findShare,
+  getAssessment,
+  listStakeholderResponses,
+  normaliseCode,
+  saveStakeholderResponse,
+  setReport,
+} from "@/lib/rmi/store";
+import {
+  reportReadyEmail,
+  send,
+  shareInviteEmail,
+} from "@/lib/rmi/mailer";
+import { generateReport, reportConfigured } from "@/lib/rmi/report";
 import { siteUrl } from "@/lib/rmi/urls";
 import { scoreAssessment, type Answers } from "@/lib/rmi/scoring";
 
 export const runtime = "nodejs";
+// after() inherits this, and the report call needs the headroom.
+export const maxDuration = 120;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -46,6 +61,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const found = await getAssessment(normaliseCode(body.id), body.token);
   const created = await addShares(normaliseCode(body.id), body.token, people);
   if (!created) {
     return NextResponse.json({ error: "That assessment link is not valid." }, { status: 404 });
@@ -56,7 +72,10 @@ export async function POST(request: Request) {
       const link = `${siteUrl()}/rmi/survey?t=${share.token}`;
       const delivery = await send({
         to: share.email,
-        ...shareInviteEmail({ link }),
+        ...shareInviteEmail({
+          organisation: found?.profile.organisation ?? "an organisation you work with",
+          link,
+        }),
       }).catch(() => ({ ok: false, queued: false }));
       return { email: share.email, link, delivered: delivery.queued };
     }),
@@ -100,7 +119,67 @@ export async function PUT(request: Request) {
     },
   });
 
+  // Writing the report takes the better part of a minute. The stakeholder has
+  // no stake in that and should not sit watching a spinner for it, so it runs
+  // once their response has already gone back.
+  after(() => onStakeholderResponse(found.assessment.id));
+
   return NextResponse.json({ received: true }, { status: 201 });
+}
+
+/**
+ * Called once a stakeholder answers. When the last outstanding invitation
+ * comes in, the report is written and emailed without anyone pressing a
+ * button. Anything that goes wrong here is logged and swallowed: the
+ * stakeholder has already answered, and failing their request because our
+ * report writer had a bad minute would be the wrong trade. The manual button
+ * on the results page stays as the way back in.
+ */
+async function onStakeholderResponse(assessmentId: string): Promise<void> {
+  try {
+    const assessment = await getAssessment(assessmentId);
+    if (!assessment) return;
+
+    const outstanding = assessment.shares.filter((s) => !s.respondedAt).length;
+    const responses = await listStakeholderResponses(assessmentId);
+
+    if (outstanding > 0) {
+      console.info("[rmi:share] still waiting", { assessmentId, outstanding });
+      return;
+    }
+
+    // Everyone is in. Only write the report if there is an assessment to
+    // report on and we have somewhere to send it.
+    if (assessment.status !== "submitted") {
+      console.info("[rmi:share] all stakeholders in, assessment not submitted yet", {
+        assessmentId,
+      });
+      return;
+    }
+    if (!reportConfigured()) {
+      console.warn("[rmi:share] all stakeholders in but OPENROUTER_API_KEY is unset", {
+        assessmentId,
+      });
+      return;
+    }
+
+    const generated = await generateReport(assessment, responses);
+    await setReport(assessmentId, { ...generated, generatedAt: new Date().toISOString() });
+
+    const link = `${siteUrl()}/rmi/report?id=${assessment.id}&t=${assessment.token}`;
+    await send({
+      to: assessment.profile.email,
+      ...reportReadyEmail({
+        organisation: assessment.profile.organisation,
+        code: assessment.id,
+        link,
+        respondents: responses.length,
+      }),
+    });
+    console.info("[rmi:share] report written and sent", { assessmentId });
+  } catch (err) {
+    console.error("[rmi:share] could not finish the report", err);
+  }
 }
 
 /** A stakeholder opens their link: tell the page who they are rating. */

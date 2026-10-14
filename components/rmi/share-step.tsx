@@ -66,8 +66,8 @@ export function ShareStep({ session }: { session: Session | null }) {
       <div>
         <p className="text-[0.9375rem] leading-relaxed text-bone-100/75">
           {links.length} {links.length === 1 ? "person has" : "people have"} been sent the
-          survey. We will chase anyone who has not answered after five days, and your report
-          follows once the responses are in.
+          survey. Once the last one answers, your report is written automatically and the
+          link lands in your inbox. Nothing else is needed from you.
         </p>
         <ul className="mt-5 flex flex-col gap-3">
           {links.map((l) => (

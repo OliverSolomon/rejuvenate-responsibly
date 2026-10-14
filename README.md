@@ -103,14 +103,27 @@ ready.
 
 ## The report
 
-`/api/rmi/report` sends the scored result, the heaviest gaps, the practices
-with no evidence behind them and the stakeholder consensus to Claude through
+The report writes itself. When the last outstanding stakeholder submits their
+survey, `/api/rmi/share` schedules the work with `after()` so the stakeholder's
+own request returns immediately rather than holding a connection open for the
+minute the model takes, then generates the report and emails the client a link.
+
+The button on the results page stays, relabelled as a draft, because the
+obvious failure mode is a stakeholder who never answers and an assessment that
+would otherwise never produce anything.
+
+Either path sends the scored result, the heaviest gaps, the practices with no
+evidence behind them and the stakeholder consensus to Claude through
 OpenRouter, and gets back Markdown in the same shape as the sample reports.
 
 The prompt is in `lib/rmi/report.ts` and is exported as `buildMessages` so it
 can be read and exercised without spending a call. It forbids inventing figures
-and bans the usual machine tells, and whatever comes back is scrubbed of em
-dashes, curly quotes and emoji before it is stored. `/rmi/report` renders it on
+and bans the usual machine tells. Asking gets most of the way, but a few words
+come back anyway, so whatever the model returns is also scrubbed: em dashes,
+curly quotes and emoji are stripped, and the handful of stubborn tells like
+"journey" and "indicating" are rewritten by the `PHRASES` table. Every
+substitution there keeps the same grammatical role, so nothing it touches can
+end up malformed. `/rmi/report` renders it on
 letterhead with the Issued by seal and prints to PDF from the browser.
 
 ## Environment variables
@@ -125,8 +138,10 @@ says what it did.
 | `NEXT_PUBLIC_PESAPAL_URL` | Fallback Pesapal checkout link for every tier |
 | `NEXT_PUBLIC_PESAPAL_URL_ESSENTIAL` | Checkout link for the Essential tier |
 | `NEXT_PUBLIC_PESAPAL_URL_PROFESSIONAL` | Checkout link for the Professional tier |
-| `RESEND_API_KEY` | Sends the invite and access emails. Without it, messages are logged instead of sent |
-| `RMI_MAIL_FROM` | From address on outbound email |
+| `MAILTRAP_TOKEN` | Sends every outbound email. Without it, messages are logged instead of sent |
+| `MAILTRAP_INBOX_ID` | Set it to catch mail in a Mailtrap test inbox. Leave unset to deliver for real |
+| `MAILTRAP_FROM_EMAIL` | From address on outbound email |
+| `MAILTRAP_FROM_NAME` | From name on outbound email |
 | `RMI_CONTACT_INBOX` | Where website enquiries land |
 | `RMI_DATA_DIR` | Where submissions are written. Defaults to `./.data` |
 
@@ -142,10 +157,12 @@ so nothing is ever a dead end.
    and wrong on a serverless host, where the filesystem is wiped between
    invocations. Replace the four exported functions with a database before the
    first paying client.
-3. **Email.** Set `RESEND_API_KEY`, or swap the `send` function in
-   `lib/rmi/mailer.ts` for whichever provider the hosting partner prefers.
-   Nothing breaks without it, but people stop receiving their reference, which
-   is the only way back into a half-finished assessment.
+3. **Email.** Set `MAILTRAP_TOKEN`. Start with `MAILTRAP_INBOX_ID` pointed at a
+   Mailtrap test inbox so nothing reaches a real person while you are still
+   trying things, then clear it once the sending domain is verified. Nothing
+   breaks without a token, but people stop receiving their reference, which is
+   the only way back into a half-finished assessment, and nobody ever learns
+   their report is ready.
 4. **Images.** Everything in `public/images` is a generated placeholder, marked
    as such on the page. Drop real photographs in at the same filenames and the
    captions disappear on their own (remove the `swap` prop on `<Media>`).

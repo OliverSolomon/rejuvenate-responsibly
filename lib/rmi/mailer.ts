@@ -1,32 +1,79 @@
 /**
- * Outbound email. Until a provider key is configured this logs the message so
- * the rest of the flow can be exercised end to end. Swap the body of `send`
- * for whichever provider the hosting partner prefers.
+ * Outbound email through Mailtrap.
+ *
+ * Mailtrap runs two separate services on near-identical APIs. Testing catches
+ * everything in an inbox so nothing reaches a real person, and needs an inbox
+ * id. Sending delivers for real from a verified domain. Point
+ * MAILTRAP_INBOX_ID at an inbox to use the first, leave it unset for the
+ * second.
+ *
+ * With no token at all, messages are logged and `queued` comes back false, and
+ * the UI tells people to copy their link by hand rather than claiming an email
+ * is on its way.
  */
 
 export type Mail = { to: string; subject: string; text: string };
+export type Delivery = { ok: boolean; queued: boolean; error?: string };
 
-export async function send(mail: Mail): Promise<{ ok: boolean; queued: boolean }> {
-  const key = process.env.RESEND_API_KEY;
-  const from =
-    process.env.RMI_MAIL_FROM ?? "Rate My Impact <no-reply@rejuvenateresponsibly.com>";
+const SENDING = "https://send.api.mailtrap.io/api/send";
+const TESTING = "https://sandbox.api.mailtrap.io/api/send";
 
-  if (!key) {
-    console.info("[rmi:mail] no provider configured, message not sent", {
+export function mailConfigured(): boolean {
+  return Boolean(process.env.MAILTRAP_TOKEN);
+}
+
+function endpoint(): string {
+  const inbox = process.env.MAILTRAP_INBOX_ID?.trim();
+  return inbox ? `${TESTING}/${inbox}` : SENDING;
+}
+
+function sender(): { email: string; name: string } {
+  return {
+    email: process.env.MAILTRAP_FROM_EMAIL ?? "no-reply@rejuvenateresponsibly.com",
+    name: process.env.MAILTRAP_FROM_NAME ?? "Rate My Impact",
+  };
+}
+
+export async function send(mail: Mail): Promise<Delivery> {
+  const token = process.env.MAILTRAP_TOKEN;
+
+  if (!token) {
+    console.info("[rmi:mail] no Mailtrap token, message not sent", {
       to: mail.to,
       subject: mail.subject,
     });
     return { ok: true, queued: false };
   }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: JSON.stringify({ from, to: mail.to, subject: mail.subject, text: mail.text }),
-  });
+  try {
+    const res = await fetch(endpoint(), {
+      method: "POST",
+      headers: { "Api-Token": token, "content-type": "application/json" },
+      body: JSON.stringify({
+        from: sender(),
+        to: [{ email: mail.to }],
+        subject: mail.subject,
+        text: mail.text,
+        category: "Rate My Impact",
+      }),
+    });
 
-  return { ok: res.ok, queued: res.ok };
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 300);
+      console.error("[rmi:mail] Mailtrap rejected the message", res.status, detail);
+      return { ok: false, queued: false, error: `Mailtrap returned ${res.status}` };
+    }
+
+    return { ok: true, queued: true };
+  } catch (err) {
+    console.error("[rmi:mail] could not reach Mailtrap", err);
+    return { ok: false, queued: false, error: "Could not reach the mail provider." };
+  }
 }
+
+/* -------------------------------------------------------------------------- */
+/* messages                                                                   */
+/* -------------------------------------------------------------------------- */
 
 export function assessmentAccessEmail(opts: {
   organisation: string;
@@ -45,9 +92,9 @@ export function assessmentAccessEmail(opts: {
       "",
       "Keep that link. It is the only way back to your answers, and anyone holding it can see them, so treat it like a password.",
       "",
-      "Your answers save as you go, on the server and in the browser you started in. You can close the tab, hand a pillar to a colleague and come back whenever suits.",
+      "Your answers save as you go, so you can close the tab, hand a pillar to a colleague and come back whenever suits.",
       "",
-      "Once you submit, you will be asked to add the people who see your operations from the outside. They each get a shorter survey, and both sets of answers go into your report.",
+      "Once you submit, you will be asked to add the people who see your operations from the outside. They each get a shorter survey, and your report is written once they have all answered.",
       "",
       "Reply to this email if anything gets in the way.",
       "",
@@ -57,13 +104,16 @@ export function assessmentAccessEmail(opts: {
   };
 }
 
-export function shareInviteEmail(opts: { link: string }): { subject: string; text: string } {
+export function shareInviteEmail(opts: {
+  organisation: string;
+  link: string;
+}): { subject: string; text: string } {
   return {
-    subject: "A short survey about an organisation you work with",
+    subject: `A short survey about ${opts.organisation}`,
     text: [
       "Hello,",
       "",
-      "You have been asked for your view as part of the Rate My Impact Sustainability Self-Assessment 2026.",
+      `${opts.organisation} has asked for your view as part of the Rate My Impact Sustainability Self-Assessment 2026.`,
       "",
       "It is 40 yes or no questions about governance, economic, environmental and social practice. Most people finish in about ten minutes. Your answers are reported alongside the other respondents and are never attributed to you by name.",
       "",
@@ -78,3 +128,31 @@ export function shareInviteEmail(opts: { link: string }): { subject: string; tex
     ].join("\n"),
   };
 }
+
+export function reportReadyEmail(opts: {
+  organisation: string;
+  code: string;
+  link: string;
+  respondents: number;
+}): { subject: string; text: string } {
+  return {
+    subject: `Your Rate My Impact report is ready: ${opts.code}`,
+    text: [
+      "Hello,",
+      "",
+      `Every stakeholder you invited has now answered, so your report for ${opts.organisation} has been written and is waiting for you.`,
+      "",
+      `Read it here: ${opts.link}`,
+      "",
+      `It covers all four pillars, sets your self-assessment against what your ${opts.respondents} ${opts.respondents === 1 ? "stakeholder" : "stakeholders"} said, and ends with a gap analysis and a roadmap.`,
+      "",
+      "The page prints straight to PDF if you need a copy to circulate.",
+      "",
+      "The report is issued on the basis of self-declared responses and the stakeholder survey. It is not an audit. If you would like it validated, reply and we will arrange a diagnostic call.",
+      "",
+      "The RMI Sustainability Team",
+      "Rejuvenate Responsibly",
+    ].join("\n"),
+  };
+}
+

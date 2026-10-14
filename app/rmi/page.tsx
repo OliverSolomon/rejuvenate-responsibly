@@ -33,7 +33,7 @@ const steps = [
   {
     n: "04",
     title: "Receive your report",
-    body: "Both views go into a scored report on letterhead with the Issued by seal, covering each pillar, the gaps and what to do about them.",
+    body: "When the last stakeholder answers, both views are written up on letterhead with the Issued by seal and emailed to you. No chasing, no button to press.",
   },
 ];
 
