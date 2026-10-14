@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import {
   PaymentBadge,
   ReportBadge,
+  SampleBadge,
   StatusBadge,
   TierBadge,
   formatDate,
@@ -77,6 +78,11 @@ export default async function ResponsesPage() {
                       >
                         {r.organisation}
                       </Link>
+                      {r.sample && (
+                        <span className="ml-2 align-middle">
+                          <SampleBadge />
+                        </span>
+                      )}
                       <span className="mt-0.5 block text-[0.75rem] text-forest-900/45">
                         {r.id} · {r.contactName || r.email}
                       </span>
@@ -130,6 +136,7 @@ export default async function ResponsesPage() {
                   {r.id} · {r.sector || "Sector not given"} · {formatDate(r.createdAt)}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {r.sample && <SampleBadge />}
                   <StatusBadge status={r.status} />
                   <PaymentBadge status={r.paymentStatus} />
                   <ReportBadge state={r.reportState} />

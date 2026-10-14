@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { analytics } from "@/lib/rmi/dashboard";
 import { Stat } from "@/components/dashboard/stat";
+import { SampleBadge } from "@/components/dashboard/status";
 import {
   ActivityChart,
   GapChart,
@@ -54,12 +55,15 @@ export default async function AnalyticsPage() {
                 key={p.id}
                 className="flex flex-wrap items-baseline justify-between gap-x-4 text-[0.875rem]"
               >
-                <Link
-                  href={`/dashboard/responses/${p.id}`}
-                  className="font-medium text-forest-900 underline-offset-4 hover:underline"
-                >
-                  {p.organisation}
-                </Link>
+                <span className="flex items-center gap-2">
+                  <Link
+                    href={`/dashboard/responses/${p.id}`}
+                    className="font-medium text-forest-900 underline-offset-4 hover:underline"
+                  >
+                    {p.organisation}
+                  </Link>
+                  {p.sample && <SampleBadge />}
+                </span>
                 <span className="text-[0.8125rem] text-forest-900/60">
                   {p.addresses} {p.addresses === 1 ? "address" : "addresses"}
                   {p.notified === p.addresses ? " · submitter told" : " · submitter not told yet"}

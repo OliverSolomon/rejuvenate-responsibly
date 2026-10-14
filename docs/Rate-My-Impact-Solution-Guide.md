@@ -9,7 +9,7 @@ date: "14 October 2026"
 
 **Prepared for:** Rejuvenate Responsibly, Nairobi, Kenya
 **Prepared by:** Oliver Wainaina
-**Version:** 1.1
+**Version:** 1.2
 **Date:** 14 October 2026
 
 ---
@@ -650,13 +650,15 @@ Pressing **Inform the submitter** opens the message in an editor, prefilled with
 
 ### 12.7 Editing a report
 
-The editor opens as a **full page**. The dashboard's top bar stays in place, with **Back** at the far left returning to the organisation, and the editor fills everything beneath it, resizing with the window. A slim strip above the document names the organisation and holds the save button and a "Saved at" note.
+The editor opens as a **full page**. The dashboard's top bar stays in place, with **Back** at the far left returning to the organisation, and the document fills everything beneath it, edge to edge and to the bottom of the screen, resizing with the window. Nothing frames it: there is no heading, no footer and no status bar under the page.
+
+The **Save report** button and a "Saved at" note sit in the top bar, next to the name of the organisation being edited, so they are always in reach.
 
 The original generated text is always preserved underneath. Saving replaces what the reader sees, marks the report as issued, and records who edited it and when.
 
 ### 12.8 Sample submissions
 
-Settings includes a **Sample submissions** switch that loads 16 invented organisations so the dashboard, report flow and edge cases can be tried without real clients. Each is labelled **[Sample]** in its name, so it can never be mistaken for a real client. They cover:
+Settings includes a **Sample submissions** switch that loads 16 invented organisations so the dashboard, report flow and edge cases can be tried without real clients. Each carries a **Sample** status badge, shown beside its name in the Responses list, on its organisation page and in the delivery alert, so it can never be mistaken for a real client. The organisation names themselves are plain, with no prefix. They cover:
 
 - every payment state (unpaid, pending, failed, waived, paid);
 - all four tiers, including a perfect score and a zero score;
@@ -668,7 +670,7 @@ Settings includes a **Sample submissions** switch that loads 16 invented organis
 
 **The switch.** Turning it **on** loads the samples. Turning it **off** asks for confirmation and then removes every sample submission, along with their invitations, responses and reports. Real submissions are never touched, because only records flagged as samples are removed. A **Reset the samples** button puts them back to their original state after experimenting.
 
-**Why some names look odd.** One sample, RMI-SMP013, is deliberately given an organisation name full of symbols and accents (an ampersand, angle brackets, quotation marks) and blank contact fields. It exists to prove that unusual names display and print correctly, so its report title looks strange on purpose. Another is deliberately very long. Anything marked [Sample] disappears when the switch is turned off.
+**Why some names look odd.** One sample, RMI-SMP013, is deliberately given an organisation name full of symbols and accents (an ampersand, angle brackets, quotation marks) and blank contact fields. It exists to prove that unusual names display and print correctly, so its report title looks strange on purpose. Another is deliberately very long. Anything carrying the Sample badge disappears when the switch is turned off.
 
 **Safety.** All sample email addresses are on example.org, which cannot receive mail, and no email is sent when they are loaded. Sample submissions appear in Analytics, the Responses list and the delivery alert like any other, so switch them off before judging real figures.
 
@@ -817,8 +819,9 @@ The stakeholder invitation promises the person's answers are "never attributed t
 | 28 | **No automatic retry or resend of stakeholder invitations** | Kept simple at launch; replaced by visibility plus a notice to the client (see Section 17) |
 | 29 | **The report editor is a full page with the top bar kept** | Editing a long document in a narrow column was cramped. Keeping the bar means the administrator never loses their place in the dashboard |
 | 30 | **The left button says "Back" on the editor** | "Back to website" would throw the administrator out of the dashboard mid-edit; Back returns them to the organisation they came from |
-| 31 | **Sample data is a single on and off switch, and every sample is labelled [Sample]** | Mock records must be unmistakable and removable in one move before real clients arrive, without any risk to real data |
+| 31 | **Sample data is a single on and off switch, and every sample carries a Sample status badge** | Mock records must be unmistakable and removable in one move before real clients arrive, without any risk to real data. A status keeps names clean in reports and lists; a prefix put "[Sample]" in report titles |
 | 32 | **Sample records use properly formed ids** | The database rejects ids that are not valid identifiers; found and fixed when samples were first loaded into Supabase |
+| 33 | **The editor's Save controls live in the top bar, and the editor's own status bar is hidden** | The aim is a document that runs to the bottom of the screen with nothing else around it. The editing tool draws its own page-count bar and cannot switch it off, so it is trimmed from view |
 
 ---
 
@@ -1120,7 +1123,8 @@ Stakeholders answer the first-level yes or no only. Weights are within the stake
 | --- | --- | --- |
 | 1.0 | 14 October 2026 | First complete guide |
 | 1.1 | 14 October 2026 | Report editor as a full page with a context-aware Back button; sample submissions as one on and off switch; explanation of the deliberately unusual sample names; decisions 29 to 32 |
+| 1.2 | 14 October 2026 | Samples show a Sample status badge instead of a name prefix; the editor runs edge to edge with Save in the top bar and no footer; decision 33 |
 
 ---
 
-*Rate My Impact: Solution Guide. Prepared by Oliver Wainaina for Rejuvenate Responsibly. Version 1.1, 14 October 2026.*
+*Rate My Impact: Solution Guide. Prepared by Oliver Wainaina for Rejuvenate Responsibly. Version 1.2, 14 October 2026.*

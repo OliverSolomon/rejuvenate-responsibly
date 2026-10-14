@@ -35,6 +35,8 @@ export type OrganisationRow = {
   responded: number;
   /** Invitations that never arrived and are still unanswered. */
   undelivered: number;
+  /** A mock submission loaded from Settings, not a real client. */
+  sample: boolean;
   reportState: ReportState;
   createdAt: string;
   submittedAt: string | null;
@@ -63,6 +65,7 @@ export async function organisationRows(): Promise<OrganisationRow[]> {
     invited: a.shares.length,
     responded: a.shares.filter((s) => s.respondedAt).length,
     undelivered: a.shares.filter(isUndelivered).length,
+    sample: a.sample === true,
     reportState: reportState(a),
     createdAt: a.createdAt,
     submittedAt: a.submittedAt,
@@ -164,6 +167,7 @@ export type Analytics = {
     organisation: string;
     addresses: number;
     notified: number;
+    sample: boolean;
   }[];
   /** Mean pillar score across every submitted assessment. */
   pillars: { section: SectionId; title: string; score: number }[];
@@ -227,6 +231,7 @@ export async function analytics(): Promise<Analytics> {
           organisation: a.profile.organisation || "Unnamed organisation",
           addresses: bad.length,
           notified: bad.filter((s) => s.notifiedAt).length,
+          sample: a.sample === true,
         };
       })
       .filter((p) => p.addresses > 0),

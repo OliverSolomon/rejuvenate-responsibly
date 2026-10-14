@@ -41,6 +41,11 @@ export function ReportBadge({ state }: { state: ReportState }) {
   return <Badge tone={s.tone}>{s.label}</Badge>;
 }
 
+/** Marks a mock submission, so it is never mistaken for a real client. */
+export function SampleBadge() {
+  return <Badge tone="quiet">Sample</Badge>;
+}
+
 export function TierBadge({ tier }: { tier: string | null }) {
   if (!tier) return <span className="text-forest-900/35">--</span>;
   return <Badge tone={tier === "Platinum" || tier === "Gold" ? "good" : "neutral"}>{tier}</Badge>;

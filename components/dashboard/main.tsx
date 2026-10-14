@@ -11,6 +11,8 @@ const EDITOR = /^\/dashboard\/responses\/[^/]+\/edit\/?$/;
  */
 export function DashboardMain({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (EDITOR.test(pathname)) return <main className="w-full">{children}</main>;
-  return <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8">{children}</main>;
+  if (EDITOR.test(pathname)) {
+    return <main className="flex min-h-0 w-full flex-1 flex-col">{children}</main>;
+  }
+  return <main className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8">{children}</main>;
 }

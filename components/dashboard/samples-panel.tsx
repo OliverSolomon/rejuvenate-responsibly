@@ -46,7 +46,7 @@ export function SamplesPanel({
           <h2 className="display text-[1.375rem]">Sample submissions</h2>
           <p className="mt-2 max-w-[62ch] text-[0.875rem] leading-relaxed text-forest-900/60">
             {cases.length} invented organisations for trying the dashboard and the report flow. They
-            appear in Analytics, Responses and the delivery alerts, each marked [Sample].{" "}
+            appear in Analytics, Responses and the delivery alerts, each carrying a Sample status badge.{" "}
             <strong>Turning this off removes every sample submission</strong> from the database.
             Real submissions are never touched. All their addresses are on example.org and no email
             is sent.

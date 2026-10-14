@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   if (!user) redirect("/signin?error=denied&next=/dashboard");
 
   return (
-    <div className="min-h-screen bg-bone-100">
+    <div className="flex min-h-screen flex-col bg-bone-100">
       <header className="sticky top-0 z-40 border-b border-forest-900/10 bg-bone-100/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3 sm:px-8">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -36,6 +36,8 @@ export default async function DashboardLayout({
               </span>
             </Link>
           </div>
+          {/* The report editor puts its Save controls here, so nothing frames the document. */}
+          <div id="dashboard-header-actions" className="ml-auto flex items-center gap-3 empty:hidden" />
           <DashboardNav email={user.email} name={user.name} />
         </div>
       </header>

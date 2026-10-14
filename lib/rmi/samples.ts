@@ -131,7 +131,7 @@ const cases: Case[] = [
   {
     title: "Not started",
     covers: "Assessment created, nothing answered, nothing paid. Empty states and zero scores.",
-    profile: { organisation: "[Sample] Mara Ridge Dairy Cooperative", contactName: "Wanjiru Kamau", email: "wanjiru.kamau@example.org", role: "Operations lead", sector: "Agriculture and food" },
+    profile: { organisation: "Mara Ridge Dairy Cooperative", contactName: "Wanjiru Kamau", email: "wanjiru.kamau@example.org", role: "Operations lead", sector: "Agriculture and food" },
     daysAgo: 2,
     status: "draft",
     payment: "unpaid",
@@ -144,7 +144,7 @@ const cases: Case[] = [
   {
     title: "Partway, payment pending",
     covers: "Checkout opened and abandoned. Part answered, with some questions skipped (null answers).",
-    profile: { organisation: "[Sample] Kilifi Coast Logistics", contactName: "Omar Abdalla", email: "omar.abdalla@example.org", role: "Finance director", sector: "Transport and logistics" },
+    profile: { organisation: "Kilifi Coast Logistics", contactName: "Omar Abdalla", email: "omar.abdalla@example.org", role: "Finance director", sector: "Transport and logistics" },
     daysAgo: 9,
     status: "draft",
     payment: "pending",
@@ -157,7 +157,7 @@ const cases: Case[] = [
   {
     title: "Payment failed",
     covers: "Gateway declined the payment. Few answers, still in progress.",
-    profile: { organisation: "[Sample] Nyali Print Works", contactName: "Achieng Otieno", email: "achieng.otieno@example.org", role: "Owner", sector: "Manufacturing" },
+    profile: { organisation: "Nyali Print Works", contactName: "Achieng Otieno", email: "achieng.otieno@example.org", role: "Owner", sector: "Manufacturing" },
     daysAgo: 14,
     status: "draft",
     payment: "failed",
@@ -170,7 +170,7 @@ const cases: Case[] = [
   {
     title: "Test run, payment waived",
     covers: "Opened while the require-payment switch was off. Must not count as paid. Nearly finished.",
-    profile: { organisation: "[Sample] Lake Basin Water Services", contactName: "Peter Njoroge", email: "peter.njoroge@example.org", role: "Sustainability officer", sector: "Utilities" },
+    profile: { organisation: "Lake Basin Water Services", contactName: "Peter Njoroge", email: "peter.njoroge@example.org", role: "Sustainability officer", sector: "Utilities" },
     daysAgo: 4,
     status: "draft",
     payment: "waived",
@@ -183,7 +183,7 @@ const cases: Case[] = [
   {
     title: "Everything answered no",
     covers: "Lowest possible score (0, Bronze). No stakeholders invited, so the report has no outside view to cite.",
-    profile: { organisation: "[Sample] Rift Valley Hardware", contactName: "Grace Mwangi", email: "grace.mwangi@example.org", role: "Manager", sector: "Retail" },
+    profile: { organisation: "Rift Valley Hardware", contactName: "Grace Mwangi", email: "grace.mwangi@example.org", role: "Manager", sector: "Retail" },
     daysAgo: 40,
     status: "submitted",
     payment: "paid",
@@ -196,7 +196,7 @@ const cases: Case[] = [
   {
     title: "Submitted, waiting on stakeholders",
     covers: "Three invited, none answered yet, and two of the invitations did not arrive (one rejected, one never sent). Submitter not told yet. Shows the delivery alert on the overview, list and detail pages.",
-    profile: { organisation: "[Sample] Tsavo Safari Lodges", contactName: "Daniel Kiprop", email: "daniel.kiprop@example.org", role: "General manager", sector: "Hospitality and tourism" },
+    profile: { organisation: "Tsavo Safari Lodges", contactName: "Daniel Kiprop", email: "daniel.kiprop@example.org", role: "General manager", sector: "Hospitality and tourism" },
     daysAgo: 18,
     status: "submitted",
     payment: "paid",
@@ -210,7 +210,7 @@ const cases: Case[] = [
   {
     title: "Some stakeholders in",
     covers: "Three invited, one answered, one invitation failed (submitter already told) and one with no delivery record, as before tracking. The admin sent the report anyway with two answers outstanding.",
-    profile: { organisation: "[Sample] Aberdare Tea Growers", contactName: "Esther Chebet", email: "esther.chebet@example.org", role: "Chief executive", sector: "Agriculture and food" },
+    profile: { organisation: "Aberdare Tea Growers", contactName: "Esther Chebet", email: "esther.chebet@example.org", role: "Chief executive", sector: "Agriculture and food" },
     daysAgo: 25,
     status: "submitted",
     payment: "paid",
@@ -225,7 +225,7 @@ const cases: Case[] = [
   {
     title: "Overrates itself",
     covers: "Silver self-score, three stakeholders answered, report generated but not yet reviewed. Large positive perception gap.",
-    profile: { organisation: "[Sample] Highland Packaging Ltd", contactName: "Rose Wafula", email: "rose.wafula@example.org", role: "Head of quality", sector: "Manufacturing" },
+    profile: { organisation: "Highland Packaging Ltd", contactName: "Rose Wafula", email: "rose.wafula@example.org", role: "Head of quality", sector: "Manufacturing" },
     daysAgo: 52,
     status: "submitted",
     payment: "paid",
@@ -238,7 +238,7 @@ const cases: Case[] = [
   {
     title: "Gold, five stakeholders, report issued",
     covers: "Professional tier, every invitation answered, report edited and issued. The generated original is kept beside the edit.",
-    profile: { organisation: "[Sample] Savannah Renewable Energy", contactName: "Joseph Karanja", email: "joseph.karanja@example.org", role: "Chief sustainability officer", sector: "Energy" },
+    profile: { organisation: "Savannah Renewable Energy", contactName: "Joseph Karanja", email: "joseph.karanja@example.org", role: "Chief sustainability officer", sector: "Energy" },
     daysAgo: 75,
     status: "submitted",
     payment: "paid",
@@ -251,7 +251,7 @@ const cases: Case[] = [
   {
     title: "Everything yes, with evidence",
     covers: "Highest possible score (100, Platinum). Unanimous stakeholders. No gaps and no near misses to list.",
-    profile: { organisation: "[Sample] Baobab Impact Fund", contactName: "Zawadi Mohamed", email: "zawadi.mohamed@example.org", role: "Managing partner", sector: "Financial services" },
+    profile: { organisation: "Baobab Impact Fund", contactName: "Zawadi Mohamed", email: "zawadi.mohamed@example.org", role: "Managing partner", sector: "Financial services" },
     daysAgo: 95,
     status: "submitted",
     payment: "paid",
@@ -264,7 +264,7 @@ const cases: Case[] = [
   {
     title: "Practices without evidence",
     covers: "Every practice exists but none can be evidenced: coverage 100, depth 0. Heavy near-miss list, and a Bronze tier despite full coverage.",
-    profile: { organisation: "[Sample] Karura Property Partners", contactName: "Caroline Wanjiku", email: "caroline.wanjiku@example.org", role: "Director", sector: "Real estate and construction" },
+    profile: { organisation: "Karura Property Partners", contactName: "Caroline Wanjiku", email: "caroline.wanjiku@example.org", role: "Director", sector: "Real estate and construction" },
     daysAgo: 33,
     status: "submitted",
     payment: "paid",
@@ -277,7 +277,7 @@ const cases: Case[] = [
   {
     title: "Stakeholders split evenly",
     covers: "Two stakeholders disagree on everything: one says yes to all, one no to all. A 50/50 tie, which the consensus rule resolves as yes.",
-    profile: { organisation: "[Sample] Turkana Basin Mining Services", contactName: "Isaac Lokwang", email: "isaac.lokwang@example.org", role: "Compliance manager", sector: "Mining and extractives" },
+    profile: { organisation: "Turkana Basin Mining Services", contactName: "Isaac Lokwang", email: "isaac.lokwang@example.org", role: "Compliance manager", sector: "Mining and extractives" },
     daysAgo: 21,
     status: "submitted",
     payment: "paid",
@@ -290,7 +290,7 @@ const cases: Case[] = [
   {
     title: "Blank fields and markup characters",
     covers: "No contact name, role or sector; a stakeholder with no name or relationship; an organisation name with &, <>, quotes and accents. Escaping and fallbacks.",
-    profile: { organisation: "[Sample] Société d'Énergie Verte & Fils <Ltd> \"Nairobi/Mombasa\"", contactName: "", email: "info.blank@example.org", role: "", sector: "" },
+    profile: { organisation: "Société d'Énergie Verte & Fils <Ltd> \"Nairobi/Mombasa\"", contactName: "", email: "info.blank@example.org", role: "", sector: "" },
     daysAgo: 12,
     status: "submitted",
     payment: "paid",
@@ -303,7 +303,7 @@ const cases: Case[] = [
   {
     title: "Very long organisation name, waived",
     covers: "Layout under a 120+ character name in lists and headings. Submitted under a waived payment, no stakeholders.",
-    profile: { organisation: "[Sample] The Combined Association of Smallholder Horticultural Growers, Packers, Exporters and Allied Service Providers of the Greater Mount Kenya and Aberdare Region Ltd", contactName: "Beatrice Gathoni", email: "beatrice.gathoni@example.org", role: "Secretary to the board", sector: "Agriculture and food" },
+    profile: { organisation: "The Combined Association of Smallholder Horticultural Growers, Packers, Exporters and Allied Service Providers of the Greater Mount Kenya and Aberdare Region Ltd", contactName: "Beatrice Gathoni", email: "beatrice.gathoni@example.org", role: "Secretary to the board", sector: "Agriculture and food" },
     daysAgo: 6,
     status: "submitted",
     payment: "waived",
@@ -316,7 +316,7 @@ const cases: Case[] = [
   {
     title: "Submitted without paying",
     covers: "Came in through the free preview link and finished. Submitted but unpaid, which the public site currently allows.",
-    profile: { organisation: "[Sample] Ngong Hills Printers", contactName: "Victor Onyango", email: "victor.onyango@example.org", role: "Partner", sector: "Manufacturing" },
+    profile: { organisation: "Ngong Hills Printers", contactName: "Victor Onyango", email: "victor.onyango@example.org", role: "Partner", sector: "Manufacturing" },
     daysAgo: 3,
     status: "submitted",
     payment: "unpaid",
@@ -329,7 +329,7 @@ const cases: Case[] = [
   {
     title: "Underrates itself",
     covers: "Low self-score, stakeholders far more positive. Negative perception gap, report issued.",
-    profile: { organisation: "[Sample] Malindi Fishers Welfare Society", contactName: "Fatuma Bakari", email: "fatuma.bakari@example.org", role: "Chairperson", sector: "Foundation, NGO or trust" },
+    profile: { organisation: "Malindi Fishers Welfare Society", contactName: "Fatuma Bakari", email: "fatuma.bakari@example.org", role: "Chairperson", sector: "Foundation, NGO or trust" },
     daysAgo: 60,
     status: "submitted",
     payment: "paid",

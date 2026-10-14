@@ -14,6 +14,7 @@ import { PerceptionChart } from "@/components/dashboard/charts";
 import {
   PaymentBadge,
   ReportBadge,
+  SampleBadge,
   StatusBadge,
   TierBadge,
   formatDate,
@@ -68,6 +69,7 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {row.sample && <SampleBadge />}
           <StatusBadge status={row.status} />
           <PaymentBadge status={row.paymentStatus} />
           <ReportBadge state={row.reportState} />
