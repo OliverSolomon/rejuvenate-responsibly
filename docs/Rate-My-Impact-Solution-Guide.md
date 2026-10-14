@@ -47,8 +47,6 @@ date: "14 October 2026"
 
 This guide describes the **Rate My Impact** platform that Rejuvenate Responsibly runs on its website: what each part does, how a person moves through it, what emails go out, what the team sees behind the scenes, and the decisions that shaped it.
 
-It is written for people who run, sell and support the service, not for developers. Where a technical idea matters, it is explained in plain words. A short glossary at the end covers the terms that remain.
-
 **What it covers**
 
 - Everything a client, a stakeholder and an administrator can do.
@@ -739,32 +737,6 @@ Submissions, stakeholder responses, reports and settings are stored in **Supabas
 | Reports | The current text, the original generated text, the models used, who edited and sent it, when |
 | Settings | One record; secrets inside are already encrypted |
 
-### 14.2 A fallback for working locally
-
-If the Supabase connection key is not present, the platform keeps data in a simple file on the machine, so it can be developed and demonstrated with nothing connected. It can be forced on (to keep a laptop away from live data) or off.
-
-### 14.3 The database changes never alter existing data
-
-The database was prepared with three scripts, each run in order:
-
-| Script | What it does |
-| --- | --- |
-| **0001** | The original structure: tables, security rules, the administrators list |
-| **0002** | Moves storage onto Supabase: adds the extra columns and the settings table |
-| **0003** | Records when a final report was sent |
-
-**Scripts 0002 and 0003 only add things.** They never delete, overwrite, rename or retype anything already there, and every step is guarded, so running one twice is harmless and running it on a database that already holds data leaves that data untouched.
-
-### 14.4 Importing earlier data
-
-If a local file from before the move exists, Settings offers **Import into Supabase**. It only adds what is missing; anything already in Supabase is left exactly as it is, the file itself is never changed, and it is safe to press more than once. Sample records are not imported.
-
-### 14.5 Who can read it
-
-The website's server reads and writes the database using a privileged key kept only on the server. Administrators are checked against the approved list before any page or action touches the data. The database also has its own rules, so even a signed-in person outside the list cannot read the tables directly.
-
----
-
 ## 15. Security and privacy
 
 | Area | How it is handled |
@@ -799,7 +771,6 @@ The stakeholder invitation promises the person's answers are "never attributed t
 | 8 | **Report written automatically once everyone answers** | Removes a manual step and delivers quickly; the button remains for stakeholders who never answer |
 | 9 | **An administrator can send early, with a clear warning** | Real life: not everyone answers. The firm needs the choice, and the client needs the truth about what the report rests on |
 | 10 | **Two-stage writing: draft then humaniser** | Cheap models are good at structure but sound machine-written; a second pass fixes tone without a premium model |
-| 11 | **Humaniser fails closed** | Better to ask for a retry than to send a client a draft that skipped the edit or lost a figure |
 | 12 | **Move from premium to low-cost models** | Reports cost under one US cent instead of about four, with the same structure and checks |
 | 13 | **Models chosen from a dropdown with live prices** | Prices change often; people should see the cost before they choose |
 | 14 | **Secrets can be saved in the dashboard, encrypted, with the server settings as a fallback** | Rotate a key without a developer or a redeploy; keep the master key out of the database |
@@ -817,12 +788,7 @@ The stakeholder invitation promises the person's answers are "never attributed t
 | 26 | **Public pages stay fast and static** | The banner asks the server on demand rather than making every page personal |
 | 27 | **Email through Mailtrap, with a test inbox mode** | Nothing reaches a real person until the team decides |
 | 28 | **No automatic retry or resend of stakeholder invitations** | Kept simple at launch; replaced by visibility plus a notice to the client (see Section 17) |
-| 29 | **The report editor is a full page with the top bar kept** | Editing a long document in a narrow column was cramped. Keeping the bar means the administrator never loses their place in the dashboard |
-| 30 | **The left button says "Back" on the editor** | "Back to website" would throw the administrator out of the dashboard mid-edit; Back returns them to the organisation they came from |
 | 31 | **Sample data is a single on and off switch, and every sample carries a Sample status badge** | Mock records must be unmistakable and removable in one move before real clients arrive, without any risk to real data. A status keeps names clean in reports and lists; a prefix put "[Sample]" in report titles |
-| 32 | **Sample records use properly formed ids** | The database rejects ids that are not valid identifiers; found and fixed when samples were first loaded into Supabase |
-| 33 | **The editor's Save controls live in the top bar, and the editor's own status bar is hidden** | The aim is a document that runs to the bottom of the screen with nothing else around it. The editing tool draws its own page-count bar and cannot switch it off, so it is trimmed from view |
-
 ---
 
 ## 17. Known limitations and things to reconcile
@@ -852,24 +818,10 @@ These are honest gaps, collected in one place so they can be decided deliberatel
 
 | Account | What for |
 | --- | --- |
-| **Supabase** | The database and administrator sign-in |
 | **Pesapal** | Taking payments (merchant approval required for live) |
 | **OpenRouter** | The AI models that write reports (a paid balance) |
 | **Mailtrap** | Sending email (verify the sending domain for live) |
-| **Hosting** | Where the website runs (currently a server deployed through GitHub) |
-
-### In order
-
-1. **Database.** In Supabase's SQL editor, run script 0001 (if not already), then 0002, then 0003. Run them before connecting the server key.
-2. **Your administrator account.** Create it in Supabase, then add it to the approved list.
-3. **Server settings.** Provide the Supabase project address and the privileged server key, and set a master key for dashboard secrets. Keep a copy of the master key.
-4. **Import** any earlier data using the button in Settings, if there is a local file.
-5. **Email.** Connect Mailtrap. Start in test-inbox mode, check the emails above look right, then switch to live once the sending domain is verified.
-6. **Report writing.** Add the OpenRouter key, check the two default models still exist, and read the cost estimate.
-7. **Payments.** Add the Pesapal keys in Settings, test in sandbox, then switch to live after approval.
-8. **Rehearse.** Load the sample submissions, walk one real test assessment through with the payment switch off, send the report from the dashboard, and then remove the samples.
-9. **Switch payment back on.** Turn **Require payment** on.
-10. **Photography.** Replace the placeholder images.
+| **Hosting** | Vercel and a VPS
 
 ---
 
@@ -1115,15 +1067,6 @@ Stakeholders answer the first-level yes or no only. Weights are within the stake
 | 9 | Employee Wellbeing | 2.2 | SDG 3 | GRI 403 |
 | 10 | Human Rights | 2.2 | SDG 16 | GRI 412 |
 
----
-
-## Document history
-
-| Version | Date | Changes |
-| --- | --- | --- |
-| 1.0 | 14 October 2026 | First complete guide |
-| 1.1 | 14 October 2026 | Report editor as a full page with a context-aware Back button; sample submissions as one on and off switch; explanation of the deliberately unusual sample names; decisions 29 to 32 |
-| 1.2 | 14 October 2026 | Samples show a Sample status badge instead of a name prefix; the editor runs edge to edge with Save in the top bar and no footer; decision 33 |
 
 ---
 

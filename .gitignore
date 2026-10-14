@@ -57,3 +57,7 @@ rr-*.tar.gz
 
 # the WordCraft runtime, copied out of node_modules at build time
 /public/wordcraft/
+
+
+# Docs
+/docs/*
