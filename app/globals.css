@@ -251,3 +251,38 @@ textarea::placeholder {
   .report-body h2 { break-after: avoid; }
   .report-body table { break-inside: avoid; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Chart tokens                                                        */
+/* Validated against the bone surface with the dataviz palette checks: */
+/* lightness band, chroma floor, CVD separation and contrast.          */
+/* The site is light only, so there is no dark set to keep in step.    */
+/* ------------------------------------------------------------------ */
+
+.viz-root {
+  --surface-1: #fbfaf6;
+  --text-primary: #0d2418;
+  --text-secondary: rgba(13, 36, 24, 0.62);
+  --text-muted: rgba(13, 36, 24, 0.42);
+  --grid: rgba(13, 36, 24, 0.09);
+
+  /* Categorical, fixed order, never cycled. */
+  --series-1: #1a8656;
+  --series-2: #90c045;
+
+  /* Ordinal ramp, light to dark, for the tier distribution. */
+  --ordinal-1: #74c196;
+  --ordinal-2: #55a278;
+  --ordinal-3: #35835b;
+  --ordinal-4: #136640;
+}
+
+.viz-root .recharts-cartesian-axis-tick text {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+
+.viz-root .recharts-label,
+.viz-root .recharts-text {
+  font-size: 11px;
+}

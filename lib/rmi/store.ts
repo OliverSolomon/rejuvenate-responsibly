@@ -55,9 +55,17 @@ export type Share = {
 };
 
 export type Report = {
+  /** What an admin would send out. Edits land here. */
   markdown: string;
   model: string;
   generatedAt: string;
+  /**
+   * The model's original wording, kept so an edit never destroys it. Only set
+   * once someone has edited, which is also how we know the report was touched.
+   */
+  generatedMarkdown?: string;
+  editedAt?: string;
+  editedBy?: string;
 };
 
 export type Assessment = {
@@ -269,6 +277,32 @@ export async function setReport(id: string, report: Report): Promise<Assessment 
   });
 }
 
+/**
+ * Replace the wording of a report an admin has edited. The model's original
+ * text is moved aside on the first edit and never overwritten after that, so
+ * there is always a way back to what was actually generated.
+ */
+export async function editReport(
+  id: string,
+  markdown: string,
+  editedBy: string,
+): Promise<Assessment | undefined> {
+  return transact((db) => {
+    const found = db.assessments.find((x) => x.id === id);
+    if (!found?.report) return undefined;
+    const now = new Date().toISOString();
+    found.report = {
+      ...found.report,
+      generatedMarkdown: found.report.generatedMarkdown ?? found.report.markdown,
+      markdown,
+      editedAt: now,
+      editedBy,
+    };
+    found.updatedAt = now;
+    return found;
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* sharing                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -342,6 +376,18 @@ export async function saveStakeholderResponse(input: {
 
     return record;
   });
+}
+
+/** Every assessment, newest first. Used by the dashboard list. */
+export async function listAssessments(): Promise<Assessment[]> {
+  const db = await read();
+  return [...db.assessments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Every stakeholder response across all assessments, for the analytics view. */
+export async function listAllStakeholderResponses(): Promise<StakeholderResponse[]> {
+  const db = await read();
+  return db.stakeholderResponses;
 }
 
 export async function listStakeholderResponses(

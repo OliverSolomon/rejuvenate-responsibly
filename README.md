@@ -30,7 +30,11 @@ app/
     payment/                   where Pesapal returns the payer
     report/                    the generated report, on letterhead
     glossary/                  definitions and consistency checks
+  dashboard/                   admin: analytics, responses, report editing
+  signin/                      admin sign-in, email and password or Google
+  auth/callback/               Supabase OAuth return
   api/
+    dashboard/report/[id]      saves an admin's edit of a report
     rmi/assessment             create, autosave, resume, submit and clear
     rmi/resume                 emails the link back to the address on file
     rmi/share                  invites the other parties, takes their answers
@@ -43,6 +47,7 @@ components/
   site/                        header, footer, contact form
   home/                        homepage sections
   rmi/                         assessment engine, scoring UI, pricing
+  dashboard/                   nav, stat tiles, charts, status badges, editor
   ui/                          buttons, logo, media frame, section shells
 lib/
   site.ts                      all marketing copy in one place
@@ -54,6 +59,10 @@ lib/
   rmi/pesapal.ts               Pesapal API 3.0 client
   rmi/report.ts                prompt and OpenRouter call
   rmi/markdown.ts              renders the generated report
+  rmi/dashboard.ts             read models behind the dashboard views
+utils/supabase/                browser, server and proxy clients
+supabase/migrations/           the whole database in one script
+proxy.ts                       keeps the dashboard behind a session
 ```
 
 ## The assessment
@@ -126,6 +135,82 @@ substitution there keeps the same grammatical role, so nothing it touches can
 end up malformed. `/rmi/report` renders it on
 letterhead with the Issued by seal and prints to PDF from the browser.
 
+## The dashboard
+
+`/dashboard` is where the firm reads what has come in. It is not linked from
+anywhere on the site and `robots.txt` disallows it, but the only thing actually
+keeping people out is the sign-in, so treat the URL as public.
+
+Two gates stand in front of it. `proxy.ts` turns away anyone without a Supabase
+session, and the layout asks a second question: a session alone is not enough,
+the account has to have a row in `rmi_admins`. Anyone signed in but not on that
+list lands back on `/signin` with a reason rather than an empty page. The API
+route behind the report editor checks the same thing for itself, since an API
+route is reachable without ever loading a page. With no Supabase settings at
+all, the dashboard shuts rather than falling open.
+
+Three views:
+
+- **Analytics**, at `/dashboard`. Totals across every organisation, then mean
+  pillar scores, the spread of tiers, assessments started by month and the
+  topics answered no most often. Every chart carries a "Show the numbers" table,
+  so nothing on the page is readable by colour alone.
+- **Responses**, at `/dashboard/responses`. One row per organisation, newest
+  first, with its status, payment, score, how many invited stakeholders have
+  answered, and whether a report exists.
+- **An organisation**, at `/dashboard/responses/<code>`. The parties it invited
+  and who has answered, pillar scores, the client's own view against the
+  stakeholder average, where the scoring weight sits, and the report.
+
+### Editing a report
+
+The report has two lives. `generated_markdown` is what the model wrote and
+`markdown` is what a reader sees, so an admin editing the wording never
+destroys the original. The first save copies the model's text aside; later
+saves leave that copy alone.
+
+Editing opens WordCraft (`@gamine/wordcraft-react`), the same editor the Sauti
+Salama project uses. It draws with WebGPU or WebGL2 and loads a WebAssembly
+runtime, so it is imported in the browser only and the page says so plainly if
+the browser cannot run it. The runtime is copied out of `node_modules` into
+`public/wordcraft/` by `scripts/copy-wordcraft-wasm.mjs`, which runs on install
+and before every dev run and build. It is a 38MB binary, so it stays out of
+git.
+
+Save asks the editor for Markdown rather than taking the bytes it wrote, which
+means the stored report is Markdown whatever format the person saved as. A
+report counts as a draft until someone has saved it; after that it reads as
+issued, since an admin has been through it.
+
+### Supabase
+
+`supabase/migrations/0001_rate_my_impact.sql` is the whole database in one
+script: extensions, enums, five tables, the admin check, the updated-at
+triggers, row level security on everything and a reporting view. Paste it into
+the SQL editor of a new project and run it once. It is idempotent, so running
+it again changes nothing.
+
+Then add yourself:
+
+```sql
+insert into rmi_admins (id, email, full_name)
+select id, email, 'Your Name' from auth.users where email = 'you@example.com';
+```
+
+Authentication is set up in the Supabase dashboard, not here: turn on email and
+password, and add Google under Authentication > Providers with
+`https://your-domain/auth/callback` as the redirect URL. The sign-in page
+offers both.
+
+Row level security is written so the browser key can read nothing on its own.
+`anon` is revoked outright, every policy requires a row in `rmi_admins`, and
+the only thing an admin may write is a report. Assessments and responses are
+inserted by the server, never by a browser.
+
+The dashboard still reads `lib/rmi/store.ts`, the JSON store the public site
+writes to, so it shows live work today. The migration is the shape to move to;
+when that happens, only the three functions in `lib/rmi/dashboard.ts` change.
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` and fill in what you have. Every one of
@@ -144,6 +229,10 @@ says what it did.
 | `MAILTRAP_FROM_NAME` | From name on outbound email |
 | `RMI_CONTACT_INBOX` | Where website enquiries land |
 | `RMI_DATA_DIR` | Where submissions are written. Defaults to `./.data` |
+| `OPENROUTER_API_KEY` | Writes the report. Without it the report button says so |
+| `OPENROUTER_MODEL` | Model slug. Defaults to `anthropic/claude-sonnet-4.5` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. Only the dashboard needs it |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser key. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is read too, for older projects |
 
 Without a Pesapal link the pricing buttons fall back to `/contact?intent=rmi`,
 so nothing is ever a dead end.
@@ -166,7 +255,11 @@ so nothing is ever a dead end.
 4. **Images.** Everything in `public/images` is a generated placeholder, marked
    as such on the page. Drop real photographs in at the same filenames and the
    captions disappear on their own (remove the `swap` prop on `<Media>`).
-5. **Report generation.** Set `OPENROUTER_API_KEY`. The model slug drifts, so
+5. **The dashboard.** Run the migration in a Supabase project, turn on email
+   and password and Google sign-in, put the project URL and publishable key in
+   the environment, and insert your own row into `rmi_admins`. Nobody can reach
+   `/dashboard` until that row exists.
+6. **Report generation.** Set `OPENROUTER_API_KEY`. The model slug drifts, so
    check `anthropic/claude-sonnet-4.5` still resolves on openrouter.ai/models
    before launch and override it with `OPENROUTER_MODEL` if it has moved.
 

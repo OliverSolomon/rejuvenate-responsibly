@@ -54,3 +54,6 @@ rr-*.tar.gz
 
 # files the desktop app drops here
 /Claude outputs/
+
+# the WordCraft runtime, copied out of node_modules at build time
+/public/wordcraft/
