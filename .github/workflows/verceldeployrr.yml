@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # 1. Download source code
+      # 1. Checkout source code
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -36,18 +36,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # 4. Build Next.js
+      # 4. Build the production application
       - name: Build Next.js
         run: npm run build
 
-      # 5. Confirm standalone output exists
+      # 5. Verify standalone output
       - name: Verify standalone build
         run: |
           set -eu
 
           if [ ! -f .next/standalone/server.js ]; then
             echo "ERROR: .next/standalone/server.js not found."
-            echo "Check next.config.js and ensure output: 'standalone' is configured."
+            echo "Ensure next.config.js enables output: 'standalone'."
             exit 1
           fi
 
@@ -63,6 +63,11 @@ jobs:
         run: |
           set -eu
 
+          : "${SSH_PRIVATE_KEY:?Missing SSH_PRIVATE_KEY secret}"
+          : "${SSH_HOST:?Missing SSH_HOST secret}"
+          : "${SSH_USER:?Missing SSH_USER secret}"
+          : "${SSH_PORT:?Missing SSH_PORT secret}"
+
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
 
@@ -74,7 +79,7 @@ jobs:
             HostName ${SSH_HOST}
             User ${SSH_USER}
             Port ${SSH_PORT}
-            IdentityFile ~/.ssh/deploy_key
+            IdentityFile $HOME/.ssh/deploy_key
             IdentitiesOnly yes
             StrictHostKeyChecking accept-new
             ServerAliveInterval 30
@@ -83,15 +88,21 @@ jobs:
 
           chmod 600 "$HOME/.ssh/config"
 
-          ssh -o BatchMode=yes production-vps \
+          test -f "$HOME/.ssh/config"
+          test -f "$HOME/.ssh/deploy_key"
+
+          echo "Testing SSH connection..."
+          ssh -F "$HOME/.ssh/config" \
+            -o BatchMode=yes \
+            production-vps \
             'printf "SSH connection successful\n"'
 
-      # 7. Check server prerequisites and prepare deployment directory
+      # 7. Prepare VPS and verify prerequisites
       - name: Prepare VPS
         run: |
           set -eu
 
-          ssh production-vps '
+          ssh -F "$HOME/.ssh/config" production-vps '
             set -eu
 
             APP_DIR="/var/www/rejuvenateresponsibly.com/app"
@@ -114,9 +125,11 @@ jobs:
         run: |
           set -eu
 
+          test -f "$HOME/.ssh/config"
+
           rsync -az --delete \
             --exclude='.next/static/' \
-            -e 'ssh -F ~/.ssh/config' \
+            -e "ssh -F $HOME/.ssh/config" \
             .next/standalone/ \
             production-vps:/var/www/rejuvenateresponsibly.com/app/
 
@@ -125,25 +138,25 @@ jobs:
         run: |
           set -eu
 
-          ssh production-vps \
+          ssh -F "$HOME/.ssh/config" production-vps \
             'mkdir -p /var/www/rejuvenateresponsibly.com/app/.next/static'
 
           rsync -az --delete \
-            -e 'ssh -F ~/.ssh/config' \
+            -e "ssh -F $HOME/.ssh/config" \
             .next/static/ \
             production-vps:/var/www/rejuvenateresponsibly.com/app/.next/static/
 
-      # 10. Upload public assets if present
+      # 10. Upload public assets, if present
       - name: Upload public assets
         run: |
           set -eu
 
           if [ -d public ]; then
-            ssh production-vps \
+            ssh -F "$HOME/.ssh/config" production-vps \
               'mkdir -p /var/www/rejuvenateresponsibly.com/app/public'
 
             rsync -az --delete \
-              -e 'ssh -F ~/.ssh/config' \
+              -e "ssh -F $HOME/.ssh/config" \
               public/ \
               production-vps:/var/www/rejuvenateresponsibly.com/app/public/
           fi
@@ -153,17 +166,17 @@ jobs:
         run: |
           set -eu
 
-          ssh production-vps '
+          ssh -F "$HOME/.ssh/config" production-vps '
             set -eu
             sudo -n systemctl restart rejuvenateresponsibly.service
           '
 
-      # 12. Verify the application is responding
+      # 12. Verify application health
       - name: Verify deployment
         run: |
           set -eu
 
-          ssh production-vps '
+          ssh -F "$HOME/.ssh/config" production-vps '
             set -eu
 
             for i in $(seq 1 30); do
@@ -172,6 +185,7 @@ jobs:
                 -o /dev/null; then
 
                 echo "Deployment successful."
+
                 sudo -n systemctl is-active \
                   rejuvenateresponsibly.service
 
