@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  formatUsd,
+  REPORT_TOKENS,
+  reportCost,
+  type ModelPrice,
+} from "@/lib/rmi/model-cost";
 import type { SecretView, SettingsView, Source, TextView } from "@/lib/rmi/settings";
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -151,10 +157,137 @@ function TextField({
   );
 }
 
+const OTHER = "__other__";
+const perM = (n: number) => `${n.toFixed(2)}`;
+
+/** A dropdown of known models with their prices, plus a way to type any other. */
+function ModelSelect({
+  label,
+  view,
+  value,
+  onValue,
+  models,
+  hint,
+}: {
+  label: string;
+  view: TextView;
+  value: string;
+  onValue: (v: string) => void;
+  models: ModelPrice[];
+  hint?: string;
+}) {
+  const known = models.some((m) => m.id === value);
+  const [typing, setTyping] = useState(!known && value !== "");
+  const showInput = typing || !known;
+  const price = models.find((m) => m.id === value);
+
+  return (
+    <Row
+      label={label}
+      tag={<SourceTag source={view.source} />}
+      hint={
+        price
+          ? `${perM(price.inPerM)} in, ${perM(price.outPerM)} out per million tokens. ${hint ?? ""}`
+          : `Price unknown for this model, so it is left out of the estimate below. ${hint ?? ""}`
+      }
+    >
+      <select
+        value={showInput ? OTHER : value}
+        onChange={(e) => {
+          if (e.target.value === OTHER) {
+            setTyping(true);
+          } else {
+            setTyping(false);
+            onValue(e.target.value);
+          }
+        }}
+        className={inputClass}
+      >
+        {models.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.id} · {perM(m.inPerM)} in / {perM(m.outPerM)} out
+          </option>
+        ))}
+        <option value={OTHER}>Other model (type its name)</option>
+      </select>
+      {showInput && (
+        <input
+          type="text"
+          value={value}
+          spellCheck={false}
+          placeholder="provider/model-name"
+          onChange={(e) => onValue(e.target.value)}
+          className={inputClass}
+        />
+      )}
+    </Row>
+  );
+}
+
+function CostSummary({
+  draftId,
+  humanizerId,
+  models,
+  source,
+}: {
+  draftId: string;
+  humanizerId: string;
+  models: ModelPrice[];
+  source: "live" | "built-in";
+}) {
+  const find = (id: string) => models.find((m) => m.id === id);
+  const cost = reportCost(find(draftId), find(humanizerId));
+  const before = reportCost(find("anthropic/claude-sonnet-4.5"), undefined).draft;
+
+  return (
+    <div className="rounded-2xl border border-forest-900/10 bg-forest-900/[0.04] p-4">
+      <p className="text-[0.75rem] font-medium tracking-wide text-forest-900/55 uppercase">
+        Average cost per report
+      </p>
+      {cost.total !== null ? (
+        <>
+          <p className="mt-1 font-[family-name:var(--font-serif)] text-[1.875rem] leading-none text-forest-900">
+            {formatUsd(cost.total)}
+          </p>
+          <p className="mt-2 text-[0.8125rem] text-forest-900/65">
+            Drafting {formatUsd(cost.draft!)} plus humaniser {formatUsd(cost.humanizer!)}. About{" "}
+            {formatUsd(cost.total * 1000)} for 1,000 reports.
+            {before !== null && cost.total < before
+              ? ` Before, drafting alone on Claude Sonnet 4.5 was about ${formatUsd(before)}.`
+              : ""}
+          </p>
+        </>
+      ) : (
+        <p className="mt-1 text-[0.875rem] text-forest-900/65">
+          One of the models has no known price, so there is no total. Pick one from the list to
+          compare.
+        </p>
+      )}
+      <p className="mt-3 text-[0.75rem] leading-relaxed text-forest-900/50">
+        An estimate from measured sizes: the draft reads about{" "}
+        {REPORT_TOKENS.draftIn.toLocaleString("en-GB")} tokens and writes about{" "}
+        {REPORT_TOKENS.draftOut.toLocaleString("en-GB")}; the humaniser reads about{" "}
+        {REPORT_TOKENS.humanizerIn.toLocaleString("en-GB")} (its rules plus the draft) and writes
+        about {REPORT_TOKENS.humanizerOut.toLocaleString("en-GB")}. Prices are{" "}
+        {source === "live" ? "live from OpenRouter" : "built-in figures, as OpenRouter could not be reached"}
+        . Retries after a failed check cost extra.
+      </p>
+    </div>
+  );
+}
+
 type Secrets = { value: string; clear: boolean };
 const blankSecret: Secrets = { value: "", clear: false };
 
-export function SettingsForm({ initial }: { initial: SettingsView }) {
+export function SettingsForm({
+  initial,
+  models,
+  pricesFrom,
+}: {
+  initial: SettingsView;
+  models: ModelPrice[];
+  pricesFrom: "live" | "built-in";
+}) {
   const router = useRouter();
   const [view, setView] = useState(initial);
 
@@ -350,21 +483,27 @@ export function SettingsForm({ initial }: { initial: SettingsView }) {
             onClear={(clear) => setApiKey({ value: "", clear })}
             disabled={locked}
           />
-          <TextField
+          <ModelSelect
             label="Drafting model"
             view={view.openrouter.draftModel}
             value={draftModel}
             onValue={setDraftModel}
-            placeholder="deepseek/deepseek-v4-flash"
+            models={models}
             hint="Writes the report to the fixed structure. A low-cost model is enough."
           />
-          <TextField
+          <ModelSelect
             label="Humaniser model"
             view={view.openrouter.humanizerModel}
             value={humanizerModel}
             onValue={setHumanizerModel}
-            placeholder="openai/gpt-4.1-mini"
-            hint="Edits the draft's prose. Prefer a model that follows editing instructions closely."
+            models={models}
+            hint="Edits the draft's prose. Prefer one that follows editing instructions closely."
+          />
+          <CostSummary
+            draftId={draftModel}
+            humanizerId={humanizerModel}
+            models={models}
+            source={pricesFrom}
           />
         </Card>
 

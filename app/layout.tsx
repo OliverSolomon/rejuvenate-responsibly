@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { SiteHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
+import { SiteChrome } from "@/components/site/site-chrome";
+import { AdminBanner } from "@/components/site/admin-banner";
 import { site } from "@/lib/site";
 
 /* Self-hosted so the site has no runtime dependency on Google Fonts. */
@@ -71,11 +73,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Skip to content
         </a>
-        <SiteHeader />
+        <SiteChrome>
+          <SiteHeader />
+        </SiteChrome>
         <main id="main" className="flex-1">
           {children}
         </main>
-        <SiteFooter />
+        <SiteChrome>
+          <SiteFooter />
+        </SiteChrome>
+        <AdminBanner />
       </body>
     </html>
   );

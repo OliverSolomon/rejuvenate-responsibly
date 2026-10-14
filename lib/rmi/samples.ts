@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { questionsFor, SECTIONS, SECTION_ORDER } from "./questions";
 import { scoreAssessment, type Answers } from "./scoring";
 import type {
@@ -26,6 +27,17 @@ import type {
  * response, every report state, and the awkward inputs (blank fields, markup
  * characters, a very long name, a split vote).
  */
+
+/**
+ * A repeatable UUID for a sample record. The database's id columns are UUIDs, so
+ * readable labels like "sample-share-6-1" are rejected there. Hashing the label
+ * keeps every load identical while producing a valid UUID.
+ */
+function sampleUuid(label: string): string {
+  const h = createHash("sha1").update(`rmi-sample:${label}`).digest("hex");
+  // Shape it as a version 4 UUID (the variant bits are fixed, the rest is hash).
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
 
 /* -------------------------------------------------------------------------- */
 /* answer generation                                                          */
@@ -474,7 +486,7 @@ export function buildSamples(now: Date = new Date()): {
     const invitedAt = submitted ? new Date(submitted.getTime() + DAY) : null;
 
     const shares: Share[] = c.invited.map((p, k) => ({
-      id: `sample-share-${n}-${k + 1}`,
+      id: sampleUuid(`share-${n}-${k + 1}`),
       name: p.name,
       email: p.email,
       relationship: p.relationship,
@@ -522,7 +534,7 @@ export function buildSamples(now: Date = new Date()): {
     const answered: StakeholderResponse[] = c.responses.map((rates, k) => {
       const ans = answersFor("stakeholder", rates, 100 + n * 10 + k);
       return {
-        id: `sample-response-${n}-${k + 1}`,
+        id: sampleUuid(`response-${n}-${k + 1}`),
         assessmentId: id,
         shareToken: shares[k].token,
         name: shares[k].name,

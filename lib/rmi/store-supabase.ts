@@ -58,10 +58,11 @@ function fail(op: string, error: NonNullable<PgError>): never {
   const stale =
     error.code === "42703" || // undefined column
     error.code === "42P01" || // undefined table
-    error.code === "22P02" || // invalid enum value ('waived')
     error.code === "PGRST204" ||
     error.code === "PGRST205" ||
     /schema cache|does not exist|invalid input value for enum/i.test(error.message);
+  // A bad value (for example a malformed id) is a bug, not a missing migration,
+  // so it is reported as itself rather than sending someone to the SQL editor.
   throw new StorageError(`Supabase ${op} failed: ${error.message}.${stale ? MIGRATION_HINT : ""}`);
 }
 

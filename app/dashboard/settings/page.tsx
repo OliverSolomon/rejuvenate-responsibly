@@ -3,6 +3,7 @@ import { SamplesPanel } from "@/components/dashboard/samples-panel";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { StoragePanel } from "@/components/dashboard/storage-panel";
 import { SAMPLE_CASES } from "@/lib/rmi/samples";
+import { modelCatalogue } from "@/lib/rmi/models";
 import { settingsView } from "@/lib/rmi/settings";
 import { countSamples, legacySummary, storageBackend, storageStatus } from "@/lib/rmi/store";
 
@@ -24,6 +25,7 @@ export default async function SettingsPage() {
   const [view, loaded] = blocked
     ? [null, { assessments: 0, responses: 0 }]
     : await Promise.all([settingsView(), countSamples()]);
+  const catalogue = await modelCatalogue();
 
   return (
     <div>
@@ -41,7 +43,9 @@ export default async function SettingsPage() {
           counts={status?.counts ?? null}
           legacy={legacy}
         />
-        {view && <SettingsForm initial={view} />}
+        {view && (
+          <SettingsForm initial={view} models={catalogue.models} pricesFrom={catalogue.source} />
+        )}
         {view && <SamplesPanel cases={SAMPLE_CASES} loaded={loaded} />}
       </div>
     </div>

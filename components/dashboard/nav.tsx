@@ -25,7 +25,7 @@ export function DashboardNav({ email, name }: { email: string; name: string | nu
   }
 
   return (
-    <div className="flex items-center gap-1 sm:gap-3">
+    <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-3">
       <nav aria-label="Dashboard" className="flex items-center gap-1">
         {links.map((link) => {
           const active =
@@ -49,7 +49,7 @@ export function DashboardNav({ email, name }: { email: string; name: string | nu
           );
         })}
       </nav>
-      <span className="hidden text-[0.8125rem] text-forest-900/45 sm:block" title={email}>
+      <span className="hidden text-[0.8125rem] text-forest-900/45 lg:block" title={email}>
         {name ?? email}
       </span>
       <button
