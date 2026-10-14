@@ -65,7 +65,7 @@ jobs:
           cat >> ~/.ssh/config <<'EOF'
           Host production-vps
             HostName ${{ secrets.SSH_HOST }}
-            User root
+            User ${{ secrets.SSH_USER }}
             Port ${{ secrets.SSH_PORT }}
             IdentityFile ~/.ssh/deploy_key
             IdentitiesOnly yes
