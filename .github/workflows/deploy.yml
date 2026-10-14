@@ -1,16 +1,16 @@
-name: Deploy Rejuvenate Responsibly
+name: Deploy Rejuvenate Responsibly (staging)
 
 on:
   push:
     branches:
-      - main
+      - staging
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: rejuvenate-responsibly-production
+  group: rejuvenate-responsibly-staging
   cancel-in-progress: true
 
 jobs:

@@ -346,9 +346,16 @@ else is read at runtime and belongs in the server's environment file alone.
 
 ## Deployment
 
-A push to `main` runs `.github/workflows/deploy.yml`, which builds the app,
-rsyncs the standalone output to the production server and restarts it in a
-Docker container behind the local port 3000.
+Two targets:
+
+- **Production (client preview): Vercel.** Every push to `main` builds on Vercel
+  with a plain Next.js build. `next.config.ts` skips `output: "standalone"`
+  when `VERCEL` is set, because the standalone trace breaks the Vercel build.
+  Set the environment variables from the table above in the Vercel project.
+- **Staging: GitHub workflow.** A push to the `staging` branch runs
+  `.github/workflows/deploy.yml`, which builds the app, rsyncs the standalone
+  output to the server and restarts it in a Docker container behind the local
+  port 3000.
 
 What the workflow needs:
 
