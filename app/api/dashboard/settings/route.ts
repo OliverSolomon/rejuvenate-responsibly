@@ -1,0 +1,127 @@
+import { NextResponse } from "next/server";
+import {
+  saveSettings,
+  settingsView,
+  type SettingsUpdate,
+} from "@/lib/rmi/settings";
+import { SecretsUnavailableError } from "@/lib/rmi/secrets";
+import { getDashboardUser } from "@/utils/supabase/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const MODEL = /^[\w.~:/-]{1,100}$/;
+const IPN = /^[\w-]{1,64}$/;
+const SECRET_MAX = 512;
+
+type Raw = Record<string, unknown>;
+
+const isObject = (v: unknown): v is Raw => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** undefined: leave alone. null: clear. string: set (checked by the caller). */
+function field(source: Raw | undefined, key: string): string | null | undefined | "invalid" {
+  if (!source || !(key in source)) return undefined;
+  const v = source[key];
+  if (v === null) return null;
+  return typeof v === "string" ? v : "invalid";
+}
+
+function parse(body: unknown): { update: SettingsUpdate } | { error: string } {
+  if (!isObject(body)) return { error: "The request body was not an object." };
+
+  const update: SettingsUpdate = {};
+
+  if ("requirePayment" in body) {
+    if (typeof body.requirePayment !== "boolean") {
+      return { error: "requirePayment must be true or false." };
+    }
+    update.requirePayment = body.requirePayment;
+  }
+
+  const pesapal = isObject(body.pesapal) ? body.pesapal : undefined;
+  const openrouter = isObject(body.openrouter) ? body.openrouter : undefined;
+
+  const secret = (v: ReturnType<typeof field>, label: string): string | null | undefined | Error => {
+    if (v === "invalid") return new Error(`${label} must be text.`);
+    if (typeof v === "string" && v.length > SECRET_MAX) return new Error(`${label} is too long.`);
+    return v;
+  };
+
+  const consumerKey = secret(field(pesapal, "consumerKey"), "The Pesapal consumer key");
+  const consumerSecret = secret(field(pesapal, "consumerSecret"), "The Pesapal consumer secret");
+  const apiKey = secret(field(openrouter, "apiKey"), "The OpenRouter key");
+  for (const v of [consumerKey, consumerSecret, apiKey]) {
+    if (v instanceof Error) return { error: v.message };
+  }
+
+  const env = field(pesapal, "env");
+  if (env === "invalid" || (typeof env === "string" && env !== "sandbox" && env !== "live")) {
+    return { error: "The Pesapal environment must be sandbox or live." };
+  }
+
+  const ipnId = field(pesapal, "ipnId");
+  if (ipnId === "invalid" || (typeof ipnId === "string" && ipnId.trim() && !IPN.test(ipnId.trim()))) {
+    return { error: "That does not look like a Pesapal IPN id." };
+  }
+
+  const draftModel = field(openrouter, "draftModel");
+  const humanizerModel = field(openrouter, "humanizerModel");
+  for (const m of [draftModel, humanizerModel]) {
+    if (m === "invalid" || (typeof m === "string" && m.trim() && !MODEL.test(m.trim()))) {
+      return { error: "Model names look like provider/model-name." };
+    }
+  }
+
+  if (pesapal) {
+    update.pesapal = {
+      consumerKey: consumerKey as string | null | undefined,
+      consumerSecret: consumerSecret as string | null | undefined,
+      env: env as "sandbox" | "live" | null | undefined,
+      ipnId: ipnId as string | null | undefined,
+    };
+  }
+  if (openrouter) {
+    update.openrouter = {
+      apiKey: apiKey as string | null | undefined,
+      draftModel: draftModel as string | null | undefined,
+      humanizerModel: humanizerModel as string | null | undefined,
+    };
+  }
+  return { update };
+}
+
+/**
+ * Save settings. The proxy keeps strangers off /dashboard, but an API route is
+ * reachable on its own, so this checks the admin list again.
+ */
+export async function PUT(request: Request) {
+  const user = await getDashboardUser();
+  if (!user) {
+    return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "The request body was not JSON." }, { status: 400 });
+  }
+
+  const parsed = parse(body);
+  if ("error" in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+
+  try {
+    await saveSettings(parsed.update, user.email);
+  } catch (err) {
+    if (err instanceof SecretsUnavailableError) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    console.error("[rmi:settings] could not save", err);
+    return NextResponse.json({ error: "The settings could not be saved." }, { status: 500 });
+  }
+
+  // Never echo a secret back: the view carries only where each value comes from.
+  return NextResponse.json({ settings: await settingsView() });
+}

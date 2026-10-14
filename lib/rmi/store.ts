@@ -1,398 +1,94 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import path from "node:path";
-import type { Answers } from "./scoring";
+import * as file from "./store-file";
+import * as supabase from "./store-supabase";
+import { storageBackend } from "./storage-config";
 
 /**
- * File backed store. Small and boring on purpose, so it can be swapped for
- * Postgres, Supabase or Airtable without any route having to change: keep the
- * exported function signatures and replace the read/write pair below.
+ * The one door to storage. Everything in the app imports from here, and this
+ * file picks the backend per call: Supabase when its service role key is
+ * configured, the local JSON file otherwise (see storage-config.ts).
  *
- * For deployment: serverless filesystems are wiped between invocations, so
- * point RMI_DATA_DIR at a mounted volume or move to a real database first.
+ * The two backends expose identical function names and signatures, so a route
+ * never knows which one it is talking to.
  */
 
-const DATA_DIR = process.env.RMI_DATA_DIR ?? path.join(process.cwd(), ".data");
-const FILE = path.join(DATA_DIR, "rmi.json");
+export * from "./store-types";
+export { storageBackend } from "./storage-config";
+export type { StorageStatus, ImportResult } from "./store-supabase";
+export type { LegacyData } from "./store-file";
 
-export type Profile = {
-  organisation: string;
-  contactName: string;
-  email: string;
-  role: string;
-  sector: string;
-};
+const impl = () => (storageBackend() === "supabase" ? supabase : file);
 
-export type ScoreSummary = {
-  overall: number;
-  coverage: number;
-  depth: number;
-  tier: string;
-  sections: { id: string; score: number }[];
-};
+/* assessments */
 
-export type PaymentStatus = "unpaid" | "pending" | "paid" | "failed";
+export const createAssessment: typeof file.createAssessment = (...a) =>
+  impl().createAssessment(...a);
+export const getAssessment: typeof file.getAssessment = (...a) => impl().getAssessment(...a);
+export const updateAssessment: typeof file.updateAssessment = (...a) =>
+  impl().updateAssessment(...a);
+export const clearAnswers: typeof file.clearAnswers = (...a) => impl().clearAnswers(...a);
+export const setPayment: typeof file.setPayment = (...a) => impl().setPayment(...a);
+export const findByMerchantReference: typeof file.findByMerchantReference = (...a) =>
+  impl().findByMerchantReference(...a);
 
-export type Payment = {
-  status: PaymentStatus;
-  tier: string | null;
-  amount: number | null;
-  currency: string;
-  merchantReference: string | null;
-  orderTrackingId: string | null;
-  method: string | null;
-  updatedAt: string | null;
-};
+/* reports */
 
-export type Share = {
-  id: string;
-  name: string;
-  email: string;
-  relationship: string;
-  token: string;
-  invitedAt: string;
-  respondedAt: string | null;
-};
+export const setReport: typeof file.setReport = (...a) => impl().setReport(...a);
+export const editReport: typeof file.editReport = (...a) => impl().editReport(...a);
+export const markReportSent: typeof file.markReportSent = (...a) => impl().markReportSent(...a);
 
-export type Report = {
-  /** What an admin would send out. Edits land here. */
-  markdown: string;
-  model: string;
-  generatedAt: string;
-  /**
-   * The model's original wording, kept so an edit never destroys it. Only set
-   * once someone has edited, which is also how we know the report was touched.
-   */
-  generatedMarkdown?: string;
-  editedAt?: string;
-  editedBy?: string;
-};
+/* sharing */
 
-export type Assessment = {
-  /** Short code the person keeps, e.g. RMI-7F3K2Q. */
-  id: string;
-  /** Secret half of the resume link. The code alone opens nothing. */
-  token: string;
-  status: "draft" | "submitted";
-  profile: Profile;
-  answers: Answers;
-  score: ScoreSummary | null;
-  payment: Payment;
-  shares: Share[];
-  report: Report | null;
-  createdAt: string;
-  updatedAt: string;
-  submittedAt: string | null;
-};
+export const addShares: typeof file.addShares = (...a) => impl().addShares(...a);
+export const recordDeliveries: typeof file.recordDeliveries = (...a) =>
+  impl().recordDeliveries(...a);
+export const markSharesNotified: typeof file.markSharesNotified = (...a) =>
+  impl().markSharesNotified(...a);
+export const findShare: typeof file.findShare = (...a) => impl().findShare(...a);
+export const saveStakeholderResponse: typeof file.saveStakeholderResponse = (...a) =>
+  impl().saveStakeholderResponse(...a);
 
-export type StakeholderResponse = {
-  id: string;
-  assessmentId: string;
-  shareToken: string;
-  name: string;
-  email: string;
-  relationship: string;
-  answers: Answers;
-  score: ScoreSummary;
-  createdAt: string;
-};
+/* lists */
 
-type Db = {
-  assessments: Assessment[];
-  stakeholderResponses: StakeholderResponse[];
-};
+export const listAssessments: typeof file.listAssessments = () => impl().listAssessments();
+export const listAllStakeholderResponses: typeof file.listAllStakeholderResponses = () =>
+  impl().listAllStakeholderResponses();
+export const listStakeholderResponses: typeof file.listStakeholderResponses = (...a) =>
+  impl().listStakeholderResponses(...a);
 
-const EMPTY: Db = { assessments: [], stakeholderResponses: [] };
+/* settings and samples */
 
-async function read(): Promise<Db> {
-  try {
-    const raw = await readFile(FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<Db>;
-    return {
-      assessments: parsed.assessments ?? [],
-      stakeholderResponses: parsed.stakeholderResponses ?? [],
-    };
-  } catch {
-    return { ...EMPTY };
+export const readSettings: typeof file.readSettings = () => impl().readSettings();
+export const changeSettings: typeof file.changeSettings = (...a) => impl().changeSettings(...a);
+export const replaceSamples: typeof file.replaceSamples = (...a) => impl().replaceSamples(...a);
+export const removeSamples: typeof file.removeSamples = () => impl().removeSamples();
+export const countSamples: typeof file.countSamples = () => impl().countSamples();
+
+/* moving from the file to Supabase */
+
+/** What the old JSON file holds, for the import panel. Reads only. */
+export async function legacySummary(): Promise<{
+  path: string;
+  assessments: number;
+  responses: number;
+  hasSettings: boolean;
+}> {
+  const data = await file.readLegacy();
+  return {
+    path: file.LEGACY_FILE,
+    assessments: data.assessments.filter((a) => !a.sample).length,
+    responses: data.stakeholderResponses.filter((r) => !r.sample).length,
+    hasSettings: Object.keys(data.settings ?? {}).length > 0,
+  };
+}
+
+export async function storageStatus() {
+  if (storageBackend() !== "supabase") return null;
+  return supabase.storageStatus();
+}
+
+export async function importLegacy() {
+  if (storageBackend() !== "supabase") {
+    throw new Error("Supabase storage is not active, so there is nothing to import into.");
   }
-}
-
-async function persist(db: Db): Promise<void> {
-  await mkdir(DATA_DIR, { recursive: true });
-  // Write beside the real file and move it into place, so a crash mid-write
-  // cannot leave a half-written database behind.
-  const tmp = `${FILE}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
-  await rename(tmp, FILE);
-}
-
-/**
- * Serialises every mutation through one promise chain. Two requests landing at
- * the same moment would otherwise each read, then each write, and the second
- * would silently drop the first one's changes.
- */
-let queue: Promise<unknown> = Promise.resolve();
-
-function transact<T>(fn: (db: Db) => Promise<T> | T): Promise<T> {
-  const run = queue.then(async () => {
-    const db = await read();
-    const out = await fn(db);
-    await persist(db);
-    return out;
-  });
-  queue = run.catch(() => undefined);
-  return run;
-}
-
-/* -------------------------------------------------------------------------- */
-/* ids                                                                        */
-/* -------------------------------------------------------------------------- */
-
-// No I, O, 0 or 1: these get read aloud and typed back in by hand.
-const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-
-function shortCode(): string {
-  const bytes = randomBytes(6);
-  let out = "";
-  for (const b of bytes) out += ALPHABET[b % ALPHABET.length];
-  return `RMI-${out}`;
-}
-
-export function normaliseCode(input: string): string {
-  const cleaned = input.trim().toUpperCase().replace(/^RMI-?/, "").replace(/[^0-9A-Z]/g, "");
-  return `RMI-${cleaned}`;
-}
-
-function secret(): string {
-  return randomBytes(24).toString("base64url");
-}
-
-/* -------------------------------------------------------------------------- */
-/* assessments                                                                */
-/* -------------------------------------------------------------------------- */
-
-export async function createAssessment(profile: Profile): Promise<Assessment> {
-  return transact((db) => {
-    let id = shortCode();
-    while (db.assessments.some((x) => x.id === id)) id = shortCode();
-
-    const now = new Date().toISOString();
-    const record: Assessment = {
-      id,
-      token: secret(),
-      status: "draft",
-      profile,
-      answers: {},
-      score: null,
-      payment: {
-        status: "unpaid",
-        tier: null,
-        amount: null,
-        currency: "KES",
-        merchantReference: null,
-        orderTrackingId: null,
-        method: null,
-        updatedAt: null,
-      },
-      shares: [],
-      report: null,
-      createdAt: now,
-      updatedAt: now,
-      submittedAt: null,
-    };
-    db.assessments.push(record);
-    return record;
-  });
-}
-
-export async function getAssessment(
-  id: string,
-  token?: string,
-): Promise<Assessment | undefined> {
-  const db = await read();
-  const found = db.assessments.find((x) => x.id === id);
-  if (!found) return undefined;
-  if (token !== undefined && found.token !== token) return undefined;
-  return found;
-}
-
-export async function updateAssessment(
-  id: string,
-  token: string,
-  patch: Partial<Pick<Assessment, "profile" | "answers" | "score" | "status" | "submittedAt">>,
-): Promise<Assessment | undefined> {
-  return transact((db) => {
-    const found = db.assessments.find((x) => x.id === id && x.token === token);
-    if (!found) return undefined;
-    Object.assign(found, patch, { updatedAt: new Date().toISOString() });
-    return found;
-  });
-}
-
-export async function clearAnswers(id: string, token: string): Promise<boolean> {
-  return transact((db) => {
-    const found = db.assessments.find((x) => x.id === id && x.token === token);
-    if (!found) return false;
-    found.answers = {};
-    found.score = null;
-    found.status = "draft";
-    found.submittedAt = null;
-    found.report = null;
-    found.updatedAt = new Date().toISOString();
-    return true;
-  });
-}
-
-export async function setPayment(
-  id: string,
-  patch: Partial<Payment>,
-): Promise<Assessment | undefined> {
-  return transact((db) => {
-    const found = db.assessments.find((x) => x.id === id);
-    if (!found) return undefined;
-    found.payment = {
-      ...found.payment,
-      ...patch,
-      updatedAt: new Date().toISOString(),
-    };
-    found.updatedAt = new Date().toISOString();
-    return found;
-  });
-}
-
-export async function findByMerchantReference(
-  reference: string,
-): Promise<Assessment | undefined> {
-  const db = await read();
-  return db.assessments.find((x) => x.payment.merchantReference === reference);
-}
-
-export async function setReport(id: string, report: Report): Promise<Assessment | undefined> {
-  return transact((db) => {
-    const found = db.assessments.find((x) => x.id === id);
-    if (!found) return undefined;
-    found.report = report;
-    found.updatedAt = new Date().toISOString();
-    return found;
-  });
-}
-
-/**
- * Replace the wording of a report an admin has edited. The model's original
- * text is moved aside on the first edit and never overwritten after that, so
- * there is always a way back to what was actually generated.
- */
-export async function editReport(
-  id: string,
-  markdown: string,
-  editedBy: string,
-): Promise<Assessment | undefined> {
-  return transact((db) => {
-    const found = db.assessments.find((x) => x.id === id);
-    if (!found?.report) return undefined;
-    const now = new Date().toISOString();
-    found.report = {
-      ...found.report,
-      generatedMarkdown: found.report.generatedMarkdown ?? found.report.markdown,
-      markdown,
-      editedAt: now,
-      editedBy,
-    };
-    found.updatedAt = now;
-    return found;
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/* sharing                                                                    */
-/* -------------------------------------------------------------------------- */
-
-export async function addShares(
-  id: string,
-  token: string,
-  people: { name: string; email: string; relationship: string }[],
-): Promise<Share[] | undefined> {
-  return transact((db) => {
-    const found = db.assessments.find((x) => x.id === id && x.token === token);
-    if (!found) return undefined;
-
-    const now = new Date().toISOString();
-    const existing = new Set(found.shares.map((s) => s.email.toLowerCase()));
-    const created: Share[] = [];
-
-    for (const person of people) {
-      const email = person.email.trim().toLowerCase();
-      if (existing.has(email)) continue;
-      existing.add(email);
-      const share: Share = {
-        id: randomUUID(),
-        name: person.name.trim(),
-        email,
-        relationship: person.relationship.trim(),
-        token: secret(),
-        invitedAt: now,
-        respondedAt: null,
-      };
-      found.shares.push(share);
-      created.push(share);
-    }
-
-    found.updatedAt = now;
-    return created;
-  });
-}
-
-export async function findShare(
-  token: string,
-): Promise<{ assessment: Assessment; share: Share } | undefined> {
-  const db = await read();
-  for (const assessment of db.assessments) {
-    const share = assessment.shares.find((s) => s.token === token);
-    if (share) return { assessment, share };
-  }
-  return undefined;
-}
-
-export async function saveStakeholderResponse(input: {
-  assessmentId: string;
-  shareToken: string;
-  name: string;
-  email: string;
-  relationship: string;
-  answers: Answers;
-  score: ScoreSummary;
-}): Promise<StakeholderResponse> {
-  return transact((db) => {
-    const record: StakeholderResponse = {
-      ...input,
-      id: randomUUID(),
-      createdAt: new Date().toISOString(),
-    };
-    db.stakeholderResponses.push(record);
-
-    const assessment = db.assessments.find((x) => x.id === input.assessmentId);
-    const share = assessment?.shares.find((s) => s.token === input.shareToken);
-    if (share) share.respondedAt = record.createdAt;
-
-    return record;
-  });
-}
-
-/** Every assessment, newest first. Used by the dashboard list. */
-export async function listAssessments(): Promise<Assessment[]> {
-  const db = await read();
-  return [...db.assessments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-/** Every stakeholder response across all assessments, for the analytics view. */
-export async function listAllStakeholderResponses(): Promise<StakeholderResponse[]> {
-  const db = await read();
-  return db.stakeholderResponses;
-}
-
-export async function listStakeholderResponses(
-  assessmentId: string,
-): Promise<StakeholderResponse[]> {
-  const db = await read();
-  return db.stakeholderResponses.filter((x) => x.assessmentId === assessmentId);
+  return supabase.importLegacy(await file.readLegacy());
 }

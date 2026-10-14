@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { analytics } from "@/lib/rmi/dashboard";
 import { Stat } from "@/components/dashboard/stat";
 import {
@@ -41,6 +42,33 @@ export default async function AnalyticsPage() {
         <Stat label="Responses" value={a.totals.responded} hint={`${responseRate}% answered`} />
         <Stat label="Reports" value={a.totals.reports} />
       </div>
+
+      {a.deliveryProblems.length > 0 && (
+        <div className="mt-8 rounded-2xl border border-clay-400/30 bg-clay-400/8 p-5">
+          <p className="text-[0.9375rem] font-medium text-clay-500">
+            Some survey invitations did not arrive
+          </p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {a.deliveryProblems.map((p) => (
+              <li
+                key={p.id}
+                className="flex flex-wrap items-baseline justify-between gap-x-4 text-[0.875rem]"
+              >
+                <Link
+                  href={`/dashboard/responses/${p.id}`}
+                  className="font-medium text-forest-900 underline-offset-4 hover:underline"
+                >
+                  {p.organisation}
+                </Link>
+                <span className="text-[0.8125rem] text-forest-900/60">
+                  {p.addresses} {p.addresses === 1 ? "address" : "addresses"}
+                  {p.notified === p.addresses ? " · submitter told" : " · submitter not told yet"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {a.totals.submitted === 0 ? (
         <div className="mt-10 rounded-card border border-forest-900/10 bg-bone-50 p-8 text-center">

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 const links = [
   { href: "/dashboard", label: "Analytics" },
   { href: "/dashboard/responses", label: "Responses" },
+  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export function DashboardNav({ email, name }: { email: string; name: string | null }) {

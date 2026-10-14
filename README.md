@@ -54,10 +54,15 @@ lib/
   rmi/questions.ts             generated question bank, do not hand-edit
   rmi/scoring.ts               weighting and tiering
   rmi/pricing.ts               tiers and Pesapal links
-  rmi/store.ts                 assessments, shares, stakeholder responses
+  rmi/store.ts                 assessments, shares, stakeholder responses, settings
+  rmi/settings.ts              dashboard value, then environment, then default
+  rmi/secrets.ts               AES-256-GCM for secrets saved from the dashboard
+  rmi/humanizer.ts             the humaniser pass and the checks on its output
+  rmi/humanizer-skill.md       the humanizer rules (generated into humanizer-skill.ts)
+  rmi/samples.ts               the sample submissions loaded from Settings
   rmi/mailer.ts                outbound email
   rmi/pesapal.ts               Pesapal API 3.0 client
-  rmi/report.ts                prompt and OpenRouter call
+  rmi/report.ts                drafting prompt and the two-pass generation
   rmi/markdown.ts              renders the generated report
   rmi/dashboard.ts             read models behind the dashboard views
 utils/supabase/                browser, server and proxy clients
@@ -122,8 +127,9 @@ obvious failure mode is a stakeholder who never answers and an assessment that
 would otherwise never produce anything.
 
 Either path sends the scored result, the heaviest gaps, the practices with no
-evidence behind them and the stakeholder consensus to Claude through
+evidence behind them and the stakeholder consensus to a drafting model through
 OpenRouter, and gets back Markdown in the same shape as the sample reports.
+That draft then always goes through the humaniser (see below) before it is stored.
 
 The prompt is in `lib/rmi/report.ts` and is exported as `buildMessages` so it
 can be read and exercised without spending a call. It forbids inventing figures
@@ -211,6 +217,95 @@ The dashboard still reads `lib/rmi/store.ts`, the JSON store the public site
 writes to, so it shows live work today. The migration is the shape to move to;
 when that happens, only the three functions in `lib/rmi/dashboard.ts` change.
 
+## Sending the final report
+
+On an organisation's page, **Send report** emails the submitter a link to the
+report. It works whether or not every stakeholder has answered. A confirmation
+modal says the report is final and, when anyone is outstanding, lists them by
+name (marking invitations that never arrived) and requires a tick before it
+sends. The server recomputes who is outstanding and refuses the send without
+that acknowledgement, so the check holds if the route is called directly. The
+email to the submitter says how many answers are missing.
+
+The automatic path only writes a report once everyone has answered, so when
+someone never does there is nothing to send. **Write report now** generates one
+from what has come in, through the same drafting and humaniser passes, so it can
+be reviewed, edited and sent. A send records when, by whom and how many answers
+were outstanding, and is shown as "Report sent". If email is not configured
+nothing is recorded as sent. Migration `0003_report_sent.sql` adds the three
+columns it needs, additively.
+
+## Invitations that do not arrive
+
+Each stakeholder invitation is sent once and not retried. The outcome is stored
+on the invitation (`delivery`: sent, failed, or not_sent when no mail provider
+was configured). The dashboard overview, the responses list and the
+organisation page flag any that did not arrive and have not been answered.
+
+On the organisation page, **Inform the submitter** opens the message in an
+editor, prefilled with the failed addresses and their survey links. The admin
+can change the subject and text; it is sent exactly as written, only to the
+submitter address on the assessment, and the invitations are then marked as
+told. They stay flagged until answered. If mail is not configured nothing is
+recorded as sent. There is still no resend button: the submitter replies with a
+corrected address, or passes the link on.
+
+## Storage
+
+`lib/rmi/store.ts` is the one door to data. It picks a backend per call:
+
+| Backend | When | Where |
+| --- | --- | --- |
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are both set | the `rmi_*` tables |
+| Local file | otherwise, or `RMI_STORAGE=file` | `RMI_DATA_DIR/rmi.json` |
+
+The file backend keeps local development working with nothing configured.
+`RMI_STORAGE=supabase` insists on Supabase and fails loudly if the key is
+missing, rather than quietly writing to a file nobody is watching.
+
+The service role key bypasses row level security. It is read only on the
+server, never from a `NEXT_PUBLIC_` variable, and `store-supabase.ts` is
+marked server-only. Anyone who can read the dashboard is still checked against
+`rmi_admins` before any page or API route touches the data.
+
+**The migration never changes existing data.** `0002_storage_on_supabase.sql`
+only adds: one enum value (`waived`), a few nullable or defaulted columns, one
+table (`rmi_settings`, closed to every role but the service role) and one
+index. No drops, deletes, updates or type changes, and every statement is
+guarded, so it is safe to run twice and safe on a project that already holds
+data. Existing rows read the new columns as their default.
+
+**Importing the old file.** Settings > Storage shows what the local JSON file
+holds and imports it with one button. It only inserts: a row that already
+exists is left exactly as it is, and the file is never modified, so running it
+again, or after real traffic has started, cannot overwrite anything. Sample
+records are not imported.
+
+**What is stored where.** Assessments, invitations (with each one's delivery
+result), stakeholder responses and reports use the 0001 tables. The original
+generated report text is always kept in `generated_markdown`, so an admin edit
+never destroys it. Dashboard settings are one row in `rmi_settings`, with
+secrets already encrypted by the application, so a database dump does not
+expose them.
+
+## The humaniser pass
+
+Every generated report is edited a second time before it is stored. The
+drafting model writes to the fixed structure; `lib/rmi/humanizer.ts` then sends
+the draft to the humaniser model with the rules in `lib/rmi/humanizer-skill.md`
+(the humanizer skill, based on Wikipedia's "Signs of AI writing").
+
+The edit is checked before it is kept: same headings in the same order, same
+table rows, every score and the assessment reference still present, and the
+length within bounds. A failed check retries once with the reason; a second
+failure fails the generation and nothing is stored, so an unedited draft never
+reaches a client. `report.humanized` and `report.humanizerModel` record which
+reports went through it. A report an admin edits afterwards is human text and is
+not run through it again.
+
+To change the rules, edit `humanizer-skill.md` and run
+`node scripts/build-humanizer.mjs`, then commit both files.
+
 ## Environment variables
 
 Copy `.env.example` to `.env.local` and fill in what you have. Every one of
@@ -220,6 +315,10 @@ says what it did.
 | Variable | What it does |
 | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Base URL used to build stakeholder survey links |
+| `RMI_SETTINGS_KEY` | Master key for secrets saved from the dashboard. Without it only the environment values work |
+| `SUPABASE_SERVICE_ROLE_KEY` | Switches storage to Supabase. Server only; bypasses row level security |
+| `RMI_STORAGE` | `file` forces the local file, `supabase` insists on Supabase. Unset picks by the key |
+| `RMI_REQUIRE_PAYMENT` | `false` lets people start without paying, for testing. The dashboard switch overrides it |
 | `PESAPAL_CONSUMER_KEY` | Opens Pesapal orders. Without it the Pay button says card payment is off |
 | `PESAPAL_CONSUMER_SECRET` | The other half of the Pesapal credentials |
 | `PESAPAL_ENV` | Unset for the sandbox, `live` to take real money |
@@ -231,7 +330,8 @@ says what it did.
 | `RMI_CONTACT_INBOX` | Where website enquiries land |
 | `RMI_DATA_DIR` | Where submissions are written. Defaults to `./.data` |
 | `OPENROUTER_API_KEY` | Writes the report. Without it the report button says so |
-| `OPENROUTER_MODEL` | Model slug. Defaults to `anthropic/claude-sonnet-4.5` |
+| `OPENROUTER_MODEL` | Drafting model. Defaults to `deepseek/deepseek-v4-flash` |
+| `OPENROUTER_HUMANIZER_MODEL` | Model that edits the draft. Defaults to `openai/gpt-4.1-mini` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. Only the dashboard needs it |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser key. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is read too, for older projects |
 
@@ -267,7 +367,9 @@ failing.
 Everything read at runtime goes in `/etc/rejuvenateresponsibly.env` on the
 server, which the container is started with.
 
-Submitted assessments are written to `.data` inside the application directory,
+Once `SUPABASE_SERVICE_ROLE_KEY` is in that file, submissions go to Supabase and
+`.data` is only a fallback (see Storage). Until then they are written to `.data`
+inside the application directory,
 which is not part of the build, so the upload step excludes it. Moving
 `RMI_DATA_DIR` to a directory of its own outside the application, mounted into
 the container, would be sturdier still.
@@ -277,10 +379,12 @@ the container, would be sturdier still.
 1. **Payments.** Put the Pesapal consumer key and secret in the environment and
    set `PESAPAL_ENV=live`. Until they are set, the Pay button says plainly that
    card payment is off and points people at the contact form.
-2. **Storage.** `lib/rmi/store.ts` writes JSON to disk, which is fine on a VPS
-   and wrong on a serverless host, where the filesystem is wiped between
-   invocations. Replace the four exported functions with a database before the
-   first paying client.
+2. **Storage.** Submissions live in Supabase. Run
+   `supabase/migrations/0002_storage_on_supabase.sql` and then
+   `0003_report_sent.sql` (after 0001) in the SQL editor, then set `SUPABASE_SERVICE_ROLE_KEY` on the server. In that order:
+   the key is what switches storage on, and the app needs the new columns first.
+   Then open Settings > Storage and use "Import into Supabase" once to bring in
+   anything in the old local file. See "Storage" below.
 3. **Email.** Set `MAILTRAP_TOKEN`. Start with `MAILTRAP_INBOX_ID` pointed at a
    Mailtrap test inbox so nothing reaches a real person while you are still
    trying things, then clear it once the sending domain is verified. Nothing
@@ -294,9 +398,17 @@ the container, would be sturdier still.
    and password and Google sign-in, put the project URL and publishable key in
    the environment, and insert your own row into `rmi_admins`. Nobody can reach
    `/dashboard` until that row exists.
-6. **Report generation.** Set `OPENROUTER_API_KEY`. The model slug drifts, so
-   check `anthropic/claude-sonnet-4.5` still resolves on openrouter.ai/models
-   before launch and override it with `OPENROUTER_MODEL` if it has moved.
+6. **Report generation.** Set `OPENROUTER_API_KEY` (environment or dashboard
+   Settings). Model slugs drift, so check the two defaults still resolve on
+   openrouter.ai/models before launch. If the server environment still pins an
+   old `OPENROUTER_MODEL`, it wins over the default: update or remove it, or
+   override it from Settings.
+7. **Payment switch.** Settings has a "require payment" switch for testing. Turn
+   it back on before launch. Assessments opened while it was off are recorded
+   as `waived`, never `paid`.
+8. **Settings key.** Set `RMI_SETTINGS_KEY` on the server before saving any
+   secret from the dashboard, and keep a copy somewhere safe: losing it makes
+   saved secrets unreadable, and you would enter them again.
 
 ## Design
 

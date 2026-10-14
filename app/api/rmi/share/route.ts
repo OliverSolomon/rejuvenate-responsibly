@@ -5,6 +5,7 @@ import {
   getAssessment,
   listStakeholderResponses,
   normaliseCode,
+  recordDeliveries,
   saveStakeholderResponse,
   setReport,
 } from "@/lib/rmi/store";
@@ -13,7 +14,8 @@ import {
   send,
   shareInviteEmail,
 } from "@/lib/rmi/mailer";
-import { generateReport, reportConfigured } from "@/lib/rmi/report";
+import { generateReport } from "@/lib/rmi/report";
+import { reportConfigured } from "@/lib/rmi/settings";
 import { siteUrl } from "@/lib/rmi/urls";
 import { scoreAssessment, type Answers } from "@/lib/rmi/scoring";
 
@@ -76,12 +78,33 @@ export async function POST(request: Request) {
           organisation: found?.profile.organisation ?? "an organisation you work with",
           link,
         }),
-      }).catch(() => ({ ok: false, queued: false }));
-      return { email: share.email, link, delivered: delivery.queued };
+      }).catch(() => ({ ok: false, queued: false, error: "Could not reach the mail provider." }));
+      return { share, email: share.email, link, delivery };
     }),
   );
 
-  return NextResponse.json({ invited: results.length, links: results }, { status: 201 });
+  // Keep the outcome. Each invite is sent once and never retried, so this
+  // record is what lets an admin see which ones did not arrive.
+  const at = new Date().toISOString();
+  await recordDeliveries(
+    normaliseCode(body.id),
+    results.map((r) => ({
+      token: r.share.token,
+      delivery: {
+        status: r.delivery.queued ? "sent" : r.delivery.ok ? "not_sent" : "failed",
+        ...("error" in r.delivery && r.delivery.error ? { error: r.delivery.error } : {}),
+        at,
+      },
+    })),
+  );
+
+  return NextResponse.json(
+    {
+      invited: results.length,
+      links: results.map((r) => ({ email: r.email, link: r.link, delivered: r.delivery.queued })),
+    },
+    { status: 201 },
+  );
 }
 
 /** A stakeholder returns their survey. */
@@ -156,8 +179,8 @@ async function onStakeholderResponse(assessmentId: string): Promise<void> {
       });
       return;
     }
-    if (!reportConfigured()) {
-      console.warn("[rmi:share] all stakeholders in but OPENROUTER_API_KEY is unset", {
+    if (!(await reportConfigured())) {
+      console.warn("[rmi:share] all stakeholders in but no OpenRouter API key is set", {
         assessmentId,
       });
       return;

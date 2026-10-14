@@ -3,6 +3,7 @@ import "server-only";
 import { SECTION_ORDER, type SectionId } from "./questions";
 import { scoreAssessment } from "./scoring";
 import {
+  isUndelivered,
   listAllStakeholderResponses,
   listAssessments,
   listStakeholderResponses,
@@ -18,7 +19,7 @@ import {
  * calls in here change: the shapes below are what the views are built against.
  */
 
-export type ReportState = "none" | "draft" | "issued";
+export type ReportState = "none" | "draft" | "issued" | "sent";
 
 export type OrganisationRow = {
   id: string;
@@ -32,6 +33,8 @@ export type OrganisationRow = {
   tier: string | null;
   invited: number;
   responded: number;
+  /** Invitations that never arrived and are still unanswered. */
+  undelivered: number;
   reportState: ReportState;
   createdAt: string;
   submittedAt: string | null;
@@ -39,6 +42,7 @@ export type OrganisationRow = {
 
 function reportState(a: Assessment): ReportState {
   if (!a.report) return "none";
+  if (a.report.sentAt) return "sent";
   // A report counts as issued once an admin has been through it and saved. Until
   // then it is what the model wrote, which is a draft however good it reads.
   return a.report.editedAt ? "issued" : "draft";
@@ -58,6 +62,7 @@ export async function organisationRows(): Promise<OrganisationRow[]> {
     tier: a.score?.tier ?? null,
     invited: a.shares.length,
     responded: a.shares.filter((s) => s.respondedAt).length,
+    undelivered: a.shares.filter(isUndelivered).length,
     reportState: reportState(a),
     createdAt: a.createdAt,
     submittedAt: a.submittedAt,
@@ -71,6 +76,12 @@ export type PartyRow = {
   invitedAt: string;
   respondedAt: string | null;
   overall: number | null;
+  token: string;
+  delivery: "sent" | "failed" | "not_sent" | "unknown";
+  deliveryError: string | null;
+  undelivered: boolean;
+  notifiedAt: string | null;
+  notifiedBy: string | null;
 };
 
 export type OrganisationDetail = {
@@ -104,6 +115,12 @@ export async function organisationDetail(
       invitedAt: share.invitedAt,
       respondedAt: share.respondedAt,
       overall: response?.score.overall ?? null,
+      token: share.token,
+      delivery: share.delivery?.status ?? "unknown",
+      deliveryError: share.delivery?.error ?? null,
+      undelivered: isUndelivered(share),
+      notifiedAt: share.notifiedAt ?? null,
+      notifiedBy: share.notifiedBy ?? null,
     };
   });
 
@@ -141,6 +158,13 @@ export type Analytics = {
     responded: number;
     paid: number;
   };
+  /** Organisations with at least one invitation that did not arrive. */
+  deliveryProblems: {
+    id: string;
+    organisation: string;
+    addresses: number;
+    notified: number;
+  }[];
   /** Mean pillar score across every submitted assessment. */
   pillars: { section: SectionId; title: string; score: number }[];
   /** How many organisations sit in each tier. */
@@ -195,6 +219,17 @@ export async function analytics(): Promise<Analytics> {
       responded: allResponses.length,
       paid: assessments.filter((a) => a.payment.status === "paid").length,
     },
+    deliveryProblems: assessments
+      .map((a) => {
+        const bad = a.shares.filter(isUndelivered);
+        return {
+          id: a.id,
+          organisation: a.profile.organisation || "Unnamed organisation",
+          addresses: bad.length,
+          notified: bad.filter((s) => s.notifiedAt).length,
+        };
+      })
+      .filter((p) => p.addresses > 0),
     pillars: SECTION_ORDER.map((id) => {
       const row = pillarTotals.get(id);
       return {

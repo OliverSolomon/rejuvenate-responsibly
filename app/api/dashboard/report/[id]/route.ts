@@ -36,7 +36,7 @@ export async function PUT(
     return NextResponse.json({ error: "That report is too long to save." }, { status: 413 });
   }
 
-  const updated = await editReport(normaliseCode(id), markdown, user.email);
+  const updated = await editReport(normaliseCode(id), markdown, user.email, user.id);
   if (!updated) {
     return NextResponse.json(
       { error: "No report exists for that assessment." },

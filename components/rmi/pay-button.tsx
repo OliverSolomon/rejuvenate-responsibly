@@ -1,19 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Tier } from "@/lib/rmi/pricing";
+
+// One request shared by every card on the page. Failing closed matters: if the
+// answer never arrives the button keeps saying "Pay", and the server decides.
+let configRequest: Promise<boolean> | null = null;
+
+function paymentRequired(): Promise<boolean> {
+  configRequest ??= fetch("/api/rmi/config", { cache: "no-store" })
+    .then((r) => r.json())
+    .then((d: { paymentRequired?: boolean }) => d.paymentRequired !== false)
+    .catch(() => true);
+  return configRequest;
+}
 
 /**
  * Paying opens the assessment. We take the billing details first, create the
  * assessment so the person gets their reference by email whatever happens at
- * the gateway, then hand off to Pesapal.
+ * the gateway, then hand off to Pesapal. While an admin has payment switched off
+ * for testing, the same button skips the gateway and opens the assessment.
  */
 export function PayButton({ tier, featured }: { tier: Tier; featured: boolean }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [required, setRequired] = useState(true);
   const [form, setForm] = useState({ organisation: "", contactName: "", email: "" });
+
+  useEffect(() => {
+    let live = true;
+    void paymentRequired().then((value) => {
+      if (live) setRequired(value);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const ready =
     form.organisation.trim().length > 1 &&
@@ -72,7 +96,7 @@ export function PayButton({ tier, featured }: { tier: Tier; featured: boolean })
   if (!open) {
     return (
       <Button variant={featured ? "lime" : "primary"} size="lg" arrow onClick={() => setOpen(true)}>
-        Pay
+        {required ? "Pay" : "Start assessment"}
       </Button>
     );
   }
@@ -119,15 +143,20 @@ export function PayButton({ tier, featured }: { tier: Tier; featured: boolean })
           disabled={!ready || busy}
           onClick={go}
         >
-          {busy ? "Opening..." : `Pay ${tier.currency} ${tier.price}`}
+          {busy
+            ? "Opening..."
+            : required
+              ? `Pay ${tier.currency} ${tier.price}`
+              : "Start assessment"}
         </Button>
         <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
           Cancel
         </Button>
       </div>
       <p className={`text-[0.75rem] ${label}`}>
-        We create your assessment and email you the reference before sending you to the
-        gateway.
+        {required
+          ? "We create your assessment and email you the reference before sending you to the gateway."
+          : "Payment is switched off while we test. We create your assessment and email you the reference."}
       </p>
     </div>
   );

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/copy-wordcraft-wasm.mjs && next dev",
+    "dev": "node scripts/copy-wordcraft-wasm.mjs && next dev -p 3001",
     "build": "node scripts/copy-wordcraft-wasm.mjs && next build",
     "start": "next start",
     "lint": "eslint",

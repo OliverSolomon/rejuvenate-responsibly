@@ -80,6 +80,11 @@ export default async function ResponsesPage() {
                       <span className="mt-0.5 block text-[0.75rem] text-forest-900/45">
                         {r.id} · {r.contactName || r.email}
                       </span>
+                      {r.undelivered > 0 && (
+                        <span className="mt-1 block text-[0.75rem] font-medium text-clay-500">
+                          {r.undelivered} invitation{r.undelivered === 1 ? "" : "s"} not delivered
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-forest-900/70">{r.sector || "--"}</td>
                     <td className="px-4 py-3.5 whitespace-nowrap text-forest-900/70">
@@ -134,6 +139,11 @@ export default async function ResponsesPage() {
                   Score {r.overall === null ? "not yet" : r.overall} · {r.responded} of{" "}
                   {r.invited} stakeholders answered
                 </p>
+                {r.undelivered > 0 && (
+                  <p className="mt-2 text-[0.8125rem] font-medium text-clay-500">
+                    {r.undelivered} invitation{r.undelivered === 1 ? "" : "s"} not delivered
+                  </p>
+                )}
               </Card>
             ))}
           </div>

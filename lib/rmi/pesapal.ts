@@ -6,36 +6,48 @@
  * then send the person to the redirect_url it hands back. Pesapal calls the IPN
  * when the payment settles and returns the person to the callback URL.
  *
- * Set PESAPAL_ENV=live to move off the sandbox.
+ * Credentials and the sandbox/live switch come from settings.ts: saved in the
+ * dashboard, or PESAPAL_* in the environment.
  */
+
+import "server-only";
+
+import { pesapalConfig, type PesapalConfig } from "./settings";
 
 const SANDBOX = "https://cybqa.pesapal.com/pesapalv3";
 const LIVE = "https://pay.pesapal.com/v3";
 
-function baseUrl(): string {
-  return process.env.PESAPAL_ENV === "live" ? LIVE : SANDBOX;
+function baseUrl(config: PesapalConfig): string {
+  return config.env === "live" ? LIVE : SANDBOX;
 }
 
-export function pesapalConfigured(): boolean {
-  return Boolean(process.env.PESAPAL_CONSUMER_KEY && process.env.PESAPAL_CONSUMER_SECRET);
-}
+export { pesapalConfigured } from "./settings";
 
 export class PesapalError extends Error {}
 
 type TokenResponse = { token?: string; error?: unknown; message?: string };
 
-let cached: { token: string; expiresAt: number } | null = null;
+// Keyed by the credentials and environment, so changing either in the
+// dashboard cannot keep serving a token from the old account.
+let cached: { for: string; token: string; expiresAt: number } | null = null;
 
-async function token(): Promise<string> {
+async function token(config: PesapalConfig): Promise<string> {
+  if (!config.consumerKey || !config.consumerSecret) {
+    throw new PesapalError("Pesapal credentials are not set.");
+  }
+  const fingerprint = `${config.env}:${config.consumerKey}:${config.consumerSecret}`;
+
   // Pesapal tokens last five minutes. Reuse one until a minute before it dies.
-  if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
+  if (cached && cached.for === fingerprint && cached.expiresAt > Date.now() + 60_000) {
+    return cached.token;
+  }
 
-  const res = await fetch(`${baseUrl()}/api/Auth/RequestToken`, {
+  const res = await fetch(`${baseUrl(config)}/api/Auth/RequestToken`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
-      consumer_key: process.env.PESAPAL_CONSUMER_KEY,
-      consumer_secret: process.env.PESAPAL_CONSUMER_SECRET,
+      consumer_key: config.consumerKey,
+      consumer_secret: config.consumerSecret,
     }),
     cache: "no-store",
   });
@@ -47,17 +59,18 @@ async function token(): Promise<string> {
     );
   }
 
-  cached = { token: data.token, expiresAt: Date.now() + 4 * 60_000 };
+  cached = { for: fingerprint, token: data.token, expiresAt: Date.now() + 4 * 60_000 };
   return data.token;
 }
 
 async function call<T>(pathname: string, init: RequestInit): Promise<T> {
-  const res = await fetch(`${baseUrl()}${pathname}`, {
+  const config = await pesapalConfig();
+  const res = await fetch(`${baseUrl(config)}${pathname}`, {
     ...init,
     headers: {
       "content-type": "application/json",
       accept: "application/json",
-      authorization: `Bearer ${await token()}`,
+      authorization: `Bearer ${await token(config)}`,
       ...(init.headers ?? {}),
     },
     cache: "no-store",
@@ -84,11 +97,14 @@ async function call<T>(pathname: string, init: RequestInit): Promise<T> {
 
 type IpnResponse = { ipn_id: string; url: string };
 
-let cachedIpnId: string | null = null;
+let cachedIpnId: { for: string; id: string } | null = null;
 
 export async function ipnId(notificationUrl: string): Promise<string> {
-  if (process.env.PESAPAL_IPN_ID) return process.env.PESAPAL_IPN_ID;
-  if (cachedIpnId) return cachedIpnId;
+  const config = await pesapalConfig();
+  if (config.ipnId) return config.ipnId;
+
+  const scope = `${config.env}:${config.consumerKey}:${notificationUrl}`;
+  if (cachedIpnId && cachedIpnId.for === scope) return cachedIpnId.id;
 
   // Reuse a registration for this exact URL rather than piling up new ones.
   const existing = await call<IpnResponse[]>("/api/URLSetup/GetIpnList", { method: "GET" }).catch(
@@ -98,7 +114,7 @@ export async function ipnId(notificationUrl: string): Promise<string> {
     ? existing.find((x) => x.url === notificationUrl)
     : undefined;
   if (match?.ipn_id) {
-    cachedIpnId = match.ipn_id;
+    cachedIpnId = { for: scope, id: match.ipn_id };
     return match.ipn_id;
   }
 
@@ -106,7 +122,7 @@ export async function ipnId(notificationUrl: string): Promise<string> {
     method: "POST",
     body: JSON.stringify({ url: notificationUrl, ipn_notification_type: "POST" }),
   });
-  cachedIpnId = registered.ipn_id;
+  cachedIpnId = { for: scope, id: registered.ipn_id };
   return registered.ipn_id;
 }
 

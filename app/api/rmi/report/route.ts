@@ -5,7 +5,8 @@ import {
   normaliseCode,
   setReport,
 } from "@/lib/rmi/store";
-import { generateReport, reportConfigured } from "@/lib/rmi/report";
+import { generateReport } from "@/lib/rmi/report";
+import { reportConfigured } from "@/lib/rmi/settings";
 import { reportReadyEmail, send } from "@/lib/rmi/mailer";
 import { siteUrl } from "@/lib/rmi/urls";
 
@@ -31,9 +32,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!reportConfigured()) {
+  if (!(await reportConfigured())) {
     return NextResponse.json(
-      { error: "Report generation is not switched on yet. Set OPENROUTER_API_KEY." },
+      {
+        error:
+          "Report generation is not switched on yet. Add the OpenRouter API key in the dashboard settings.",
+      },
       { status: 503 },
     );
   }

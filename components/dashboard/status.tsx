@@ -16,12 +16,14 @@ const PAYMENT: Record<string, { label: string; tone: BadgeTone }> = {
   pending: { label: "Payment pending", tone: "pending" },
   paid: { label: "Paid", tone: "good" },
   failed: { label: "Payment failed", tone: "neutral" },
+  waived: { label: "Payment waived", tone: "neutral" },
 };
 
 const REPORT: Record<ReportState, { label: string; tone: BadgeTone }> = {
   none: { label: "No report", tone: "quiet" },
   draft: { label: "Draft report", tone: "pending" },
   issued: { label: "Report issued", tone: "strong" },
+  sent: { label: "Report sent", tone: "strong" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

@@ -129,18 +129,63 @@ export function shareInviteEmail(opts: {
   };
 }
 
+/**
+ * Sent by an admin to the person who submitted the assessment, when invitations
+ * to their stakeholders did not go through. The admin sees and can edit this
+ * text before it leaves; this is only the starting draft.
+ */
+export function deliveryNoticeEmail(opts: {
+  contactName: string;
+  organisation: string;
+  failed: { email: string; link: string }[];
+}): { subject: string; text: string } {
+  const many = opts.failed.length > 1;
+  return {
+    subject: `${many ? "Some survey invitations" : "A survey invitation"} for ${opts.organisation} did not arrive`,
+    text: [
+      `Hello${opts.contactName ? ` ${opts.contactName.split(" ")[0]}` : ""},`,
+      "",
+      `We tried to send the Rate My Impact survey to ${many ? "the addresses" : "the address"} below on behalf of ${opts.organisation}, and the ${many ? "messages were" : "message was"} not delivered:`,
+      "",
+      ...opts.failed.flatMap((f) => [`${f.email}`, `Survey link: ${f.link}`, ""]),
+      `Please check ${many ? "each address" : "the address"} for typing mistakes. You can reply to this email with a corrected address and we will send the invitation again, or you can pass the survey link above to ${many ? "each person" : "them"} yourself.`,
+      "",
+      "Your report is written once everyone you invited has answered, so it is worth sorting this out soon.",
+      "",
+      "The RMI Sustainability Team",
+      "Rejuvenate Responsibly",
+    ].join("\n"),
+  };
+}
+
 export function reportReadyEmail(opts: {
   organisation: string;
   code: string;
   link: string;
   respondents: number;
+  /**
+   * Set when an admin sends the report before everyone has answered. The email
+   * then says so plainly instead of claiming every stakeholder is in.
+   */
+  outstanding?: number;
+  invited?: number;
 }): { subject: string; text: string } {
+  const early = (opts.outstanding ?? 0) > 0;
+  const opening = early
+    ? `The Rejuvenate Responsibly team has finalised your report for ${opts.organisation}, and it is ready for you.`
+    : `Every stakeholder you invited has now answered, so your report for ${opts.organisation} has been written and is waiting for you.`;
   return {
     subject: `Your Rate My Impact report is ready: ${opts.code}`,
     text: [
       "Hello,",
       "",
-      `Every stakeholder you invited has now answered, so your report for ${opts.organisation} has been written and is waiting for you.`,
+      opening,
+      ...(early
+        ? [
+            "",
+            `It is based on answers from ${opts.respondents} of ${opts.invited ?? opts.respondents + (opts.outstanding ?? 0)} stakeholders. ${opts.outstanding} had not responded when it was finalised, so their view is not in it.`,
+          ]
+        : []),
       "",
       `Read it here: ${opts.link}`,
       "",

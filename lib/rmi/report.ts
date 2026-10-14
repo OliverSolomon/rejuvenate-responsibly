@@ -1,20 +1,23 @@
+import { humanize } from "./humanizer";
+import { chat, type ChatMessage } from "./openrouter";
 import { SECTIONS, questionsFor } from "./questions";
 import { perceptionGap, scoreAssessment, type Answers } from "./scoring";
+import { openRouterConfig } from "./settings";
 import type { Assessment, StakeholderResponse } from "./store";
 
 /**
- * Builds the consolidated report through OpenRouter. The model gets the scored
- * result and the answer-level detail, never a free hand: the structure below
- * matches the sample reports we publish, so the output drops straight onto
- * letterhead.
+ * Builds the consolidated report through OpenRouter, in two passes.
+ *
+ * Pass one: a low-cost drafting model gets the scored result and the
+ * answer-level detail, never a free hand. The structure below matches the
+ * sample reports we publish, so the output drops straight onto letterhead.
+ *
+ * Pass two: the humaniser (humanizer.ts) edits the draft's prose. Every report
+ * goes through it; there is no path that stores a draft that skipped it.
+ *
+ * Which models run, and the API key, come from the dashboard settings or the
+ * environment (see settings.ts).
  */
-
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5";
-
-export function reportConfigured(): boolean {
-  return Boolean(process.env.OPENROUTER_API_KEY);
-}
 
 function answerDigest(answers: Answers, audience: "client" | "stakeholder"): string {
   const questions = questionsFor(audience);
@@ -72,9 +75,15 @@ function stakeholderDigest(responses: StakeholderResponse[]): string {
   ].join("\n");
 }
 
-export type GeneratedReport = { markdown: string; model: string };
+export type GeneratedReport = {
+  markdown: string;
+  /** The drafting model. */
+  model: string;
+  humanizerModel: string;
+  humanized: true;
+};
 
-export type Message = { role: "system" | "user"; content: string };
+export type Message = ChatMessage;
 
 /**
  * Exported so the prompt can be inspected and exercised without spending a
@@ -194,41 +203,29 @@ export async function generateReport(
   assessment: Assessment,
   stakeholders: StakeholderResponse[],
 ): Promise<GeneratedReport> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY is not set.");
+  const config = await openRouterConfig();
+  if (!config.apiKey) throw new Error("No OpenRouter API key is configured.");
 
-  const model = process.env.OPENROUTER_MODEL ?? DEFAULT_MODEL;
-
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-      "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://rejuvenateresponsibly.com",
-      "X-Title": "Rejuvenate Responsibly RMI",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 6000,
-      temperature: 0.4,
+  const draft = scrub(
+    await chat({
+      apiKey: config.apiKey,
+      model: config.draftModel,
       messages: buildMessages(assessment, stakeholders),
+      temperature: 0.4,
     }),
+  );
+
+  const edited = await humanize(draft, {
+    apiKey: config.apiKey,
+    model: config.humanizerModel,
   });
 
-  if (!res.ok) {
-    throw new Error(`OpenRouter returned ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  }
-
-  const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-    error?: { message?: string };
+  return {
+    markdown: scrub(edited),
+    model: config.draftModel,
+    humanizerModel: config.humanizerModel,
+    humanized: true,
   };
-  const markdown = data.choices?.[0]?.message?.content?.trim();
-  if (!markdown) {
-    throw new Error(data.error?.message ?? "OpenRouter returned an empty report.");
-  }
-
-  return { markdown: scrub(markdown), model };
 }
 
 /**

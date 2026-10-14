@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { organisationDetail } from "@/lib/rmi/dashboard";
+import { deliveryNoticeEmail } from "@/lib/rmi/mailer";
+import { siteUrl } from "@/lib/rmi/urls";
+import { DeliveryNotice } from "@/components/dashboard/delivery-notice";
+import { SendReport } from "@/components/dashboard/send-report";
+import { Badge } from "@/components/ui/badge";
 import { renderMarkdown } from "@/lib/rmi/markdown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Stat } from "@/components/dashboard/stat";
@@ -29,6 +34,18 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
   const { row, assessment, parties, selfScore, perception } = detail;
   const report = assessment.report;
   const everyoneIn = row.invited > 0 && row.responded === row.invited;
+
+  const failed = parties.filter((p) => p.undelivered);
+  const notice = failed.length
+    ? deliveryNoticeEmail({
+        contactName: row.contactName,
+        organisation: row.organisation,
+        failed: failed.map((p) => ({
+          email: p.email,
+          link: `${siteUrl()}/rmi/survey?t=${p.token}`,
+        })),
+      })
+    : null;
 
   return (
     <div>
@@ -72,6 +89,25 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
         />
       </div>
 
+      {notice && (
+        <div className="mt-8">
+          <DeliveryNotice
+            assessmentId={row.id}
+            submitterName={row.contactName}
+            submitterEmail={row.email}
+            failed={failed.map((p) => ({
+              email: p.email,
+              name: p.name === p.email ? "" : p.name,
+              error: p.deliveryError,
+              reason: p.delivery === "not_sent" ? "not_sent" : "failed",
+              notifiedAt: p.notifiedAt,
+            }))}
+            defaultSubject={notice.subject}
+            defaultText={notice.text}
+          />
+        </div>
+      )}
+
       {/* Parties involved */}
       <Card className="mt-8">
         <CardHeader>
@@ -87,7 +123,7 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
               <table className="w-full border-collapse text-[0.875rem]">
                 <thead>
                   <tr className="border-b border-forest-900/10 text-left">
-                    {["Name", "Email", "Relationship", "Invited", "Status", "Their score"].map((h) => (
+                    {["Name", "Email", "Relationship", "Invited", "Delivery", "Status", "Their score"].map((h) => (
                       <th
                         key={h}
                         className="py-2.5 pr-4 text-[0.6875rem] font-medium tracking-wide text-forest-900/50 uppercase"
@@ -105,6 +141,15 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
                       <td className="py-3 pr-4 text-forest-900/70">{p.relationship || "--"}</td>
                       <td className="py-3 pr-4 whitespace-nowrap text-forest-900/70">
                         {formatDate(p.invitedAt)}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {p.delivery === "unknown" ? (
+                          <span className="text-forest-900/35">--</span>
+                        ) : p.delivery === "sent" ? (
+                          <Badge tone="good">Delivered</Badge>
+                        ) : (
+                          <Badge tone="pending">Not delivered</Badge>
+                        )}
                       </td>
                       <td className="py-3 pr-4">
                         <StatusBadge status={p.respondedAt ? "submitted" : "draft"} />
@@ -202,16 +247,42 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
 
       {/* The report */}
       <Card className="mt-8">
-        <CardHeader className="flex-row items-center justify-between gap-4">
+        <CardHeader className="flex-row flex-wrap items-start justify-between gap-4">
           <CardTitle>Report</CardTitle>
-          {report && (
-            <Link
-              href={`/dashboard/responses/${row.id}/edit`}
-              className="rounded-full bg-forest-900 px-4 py-2 text-[0.8125rem] font-medium text-bone-50 transition hover:bg-forest-700"
-            >
-              Edit report
-            </Link>
-          )}
+          <div className="flex flex-wrap items-start gap-3">
+            {report && (
+              <Link
+                href={`/dashboard/responses/${row.id}/edit`}
+                className="rounded-full border border-forest-900/20 px-4 py-2 text-[0.8125rem] font-medium text-forest-900 transition hover:border-forest-900/50"
+              >
+                Edit report
+              </Link>
+            )}
+            <SendReport
+              assessmentId={row.id}
+              organisation={row.organisation}
+              submitterName={row.contactName}
+              submitterEmail={row.email}
+              hasReport={Boolean(report)}
+              canGenerate={row.status === "submitted"}
+              invited={row.invited}
+              responded={row.responded}
+              outstanding={parties
+                .filter((p) => !p.respondedAt)
+                .map((p) => ({
+                  name: p.name === p.email ? "" : p.name,
+                  email: p.email,
+                  relationship: p.relationship,
+                  undelivered: p.undelivered,
+                }))}
+              sentAt={report?.sentAt ?? null}
+              sentBy={report?.sentBy ?? null}
+              sentOutstanding={report?.sentOutstanding ?? null}
+              editedAfterSent={Boolean(
+                report?.sentAt && report.editedAt && report.editedAt > report.sentAt,
+              )}
+            />
+          </div>
         </CardHeader>
         <CardContent>
           {!report ? (
@@ -231,6 +302,9 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
               <p className="text-[0.75rem] text-forest-900/45">
                 Written {formatDate(report.generatedAt)} by {report.model}
                 {report.editedAt ? ` · edited ${formatDate(report.editedAt)}` : ""}
+                {report.sentAt
+                  ? ` · sent ${formatDate(report.sentAt)}${report.sentOutstanding ? ` with ${report.sentOutstanding} ${report.sentOutstanding === 1 ? "answer" : "answers"} outstanding` : ""}`
+                  : ""}
               </p>
               <div
                 className="report-body mt-5 max-w-[72ch]"
