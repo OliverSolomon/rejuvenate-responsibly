@@ -1,13 +1,14 @@
 import type { MetadataRoute } from "next";
 import { baseUrl } from "@/lib/seo";
 
-const routes = ["/", "/about", "/services", "/why-rejuvenate", "/rmi", "/rmi/glossary", "/contact"];
-
 export default function sitemap(): MetadataRoute.Sitemap {
+  const routes = ["", "/about", "/services", "/why-rejuvenate", "/rmi", "/rmi/glossary", "/contact"];
   const origin = baseUrl();
-  return routes.map((path) => ({
-    url: `${origin}${path === "/" ? "" : path}`,
-    changeFrequency: "monthly",
-    priority: path === "/" ? 1 : 0.7,
+  const now = new Date();
+  return routes.map((route) => ({
+    url: `${origin}${route}`,
+    lastModified: now,
+    changeFrequency: route === "" ? "monthly" : "yearly",
+    priority: route === "" ? 1 : route === "/rmi" ? 0.9 : 0.7,
   }));
 }
