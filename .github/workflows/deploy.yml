@@ -31,10 +31,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check build-time settings
+        run: |
+          set -eu
+
+          # NEXT_PUBLIC_ variables are compiled into the browser bundle, so they
+          # have to be present here. The server reads its own copy at runtime
+          # from /etc/rejuvenateresponsibly.env, which is too late for these.
+          missing=""
+
+          for name in NEXT_PUBLIC_SITE_URL NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              missing="$missing $name"
+            fi
+          done
+
+          if [ -n "$missing" ]; then
+            echo "WARNING: not set as repository variables:$missing"
+            echo "The site will deploy, but admin sign-in at /dashboard will not"
+            echo "work until they are set under Settings > Secrets and variables"
+            echo "> Actions > Variables."
+          fi
+        env:
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+
       - name: Build Next.js application
         run: npm run build
         env:
           NODE_ENV: production
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Prepare standalone deployment
         run: |
@@ -116,7 +147,11 @@ jobs:
         run: |
           set -eu
 
+          # .data holds the submitted assessments. It lives inside the app
+          # directory and is not part of the build, so --delete would wipe it on
+          # every deployment.
           rsync -az --delete \
+            --exclude '.data/' \
             -e "ssh -F ~/.ssh/config" \
             .next/standalone/ \
             production:/var/www/rejuvenateresponsibly.com/app/

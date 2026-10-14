@@ -220,9 +220,10 @@ says what it did.
 | Variable | What it does |
 | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Base URL used to build stakeholder survey links |
-| `NEXT_PUBLIC_PESAPAL_URL` | Fallback Pesapal checkout link for every tier |
-| `NEXT_PUBLIC_PESAPAL_URL_ESSENTIAL` | Checkout link for the Essential tier |
-| `NEXT_PUBLIC_PESAPAL_URL_PROFESSIONAL` | Checkout link for the Professional tier |
+| `PESAPAL_CONSUMER_KEY` | Opens Pesapal orders. Without it the Pay button says card payment is off |
+| `PESAPAL_CONSUMER_SECRET` | The other half of the Pesapal credentials |
+| `PESAPAL_ENV` | Unset for the sandbox, `live` to take real money |
+| `PESAPAL_IPN_ID` | Optional. Pins one IPN registration instead of registering on demand |
 | `MAILTRAP_TOKEN` | Sends every outbound email. Without it, messages are logged instead of sent |
 | `MAILTRAP_INBOX_ID` | Set it to catch mail in a Mailtrap test inbox. Leave unset to deliver for real |
 | `MAILTRAP_FROM_EMAIL` | From address on outbound email |
@@ -234,8 +235,42 @@ says what it did.
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. Only the dashboard needs it |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase browser key. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is read too, for older projects |
 
-Without a Pesapal link the pricing buttons fall back to `/contact?intent=rmi`,
-so nothing is ever a dead end.
+Without Pesapal credentials the pricing buttons fall back to
+`/contact?intent=rmi`, so nothing is ever a dead end.
+
+The four `NEXT_PUBLIC_` variables are different from the rest. Next compiles
+them into the browser bundle, so they are read when the site is built, not when
+it runs. Setting them only in the server's environment file is too late: the
+browser half of sign-in would be built with nothing to connect to. Everything
+else is read at runtime and belongs in the server's environment file alone.
+
+## Deployment
+
+A push to `main` runs `.github/workflows/deploy.yml`, which builds the app,
+rsyncs the standalone output to the production server and restarts it in a
+Docker container behind the local port 3000.
+
+What the workflow needs:
+
+| Where | Name | Why |
+| --- | --- | --- |
+| Secrets | `SSH_PRIVATE_KEY`, `SSH_HOST` | Reaching the server |
+| Variables | `NEXT_PUBLIC_SITE_URL` | Links in outbound email |
+| Variables | `NEXT_PUBLIC_SUPABASE_URL` | Admin sign-in, compiled in |
+| Variables | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Admin sign-in, compiled in |
+
+Both live under Settings > Secrets and variables > Actions. A build with the
+variables missing still deploys and still serves the public site; it just
+cannot sign an admin in, and the workflow says so in its log rather than
+failing.
+
+Everything read at runtime goes in `/etc/rejuvenateresponsibly.env` on the
+server, which the container is started with.
+
+Submitted assessments are written to `.data` inside the application directory,
+which is not part of the build, so the upload step excludes it. Moving
+`RMI_DATA_DIR` to a directory of its own outside the application, mounted into
+the container, would be sturdier still.
 
 ## Before launch
 
