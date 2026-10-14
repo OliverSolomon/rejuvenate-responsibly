@@ -18,7 +18,7 @@ export function SignInForm({ reason, next }: { reason?: string; next?: string })
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState<null | "password" | "google">(null);
+  const [busy, setBusy] = useState<null | "password">(null);
   const [error, setError] = useState<string | null>(reason ? (REASONS[reason] ?? null) : null);
 
   const destination = next && next.startsWith("/") ? next : "/dashboard";
@@ -42,24 +42,6 @@ export function SignInForm({ reason, next }: { reason?: string; next?: string })
     }
   }
 
-  async function withGoogle() {
-    setBusy("google");
-    setError(null);
-    try {
-      const { error: authError } = await createClient().auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
-        },
-      });
-      if (authError) throw authError;
-      // The browser leaves for Google, so there is nothing to do here.
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign in did not start.");
-      setBusy(null);
-    }
-  }
-
   return (
     <div className="mt-10">
       {error && (
@@ -70,9 +52,9 @@ export function SignInForm({ reason, next }: { reason?: string; next?: string })
 
       <button
         type="button"
-        onClick={withGoogle}
-        disabled={busy !== null}
-        className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-forest-900/15 bg-bone-50 text-[0.9375rem] font-medium text-forest-900 transition-colors hover:border-forest-900/40 disabled:opacity-50"
+        disabled
+        aria-disabled
+        className="flex h-12 w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-forest-900/15 bg-bone-50 text-[0.9375rem] font-medium text-forest-900 opacity-60"
       >
         <svg viewBox="0 0 18 18" aria-hidden className="h-4.5 w-4.5">
           <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
@@ -80,7 +62,10 @@ export function SignInForm({ reason, next }: { reason?: string; next?: string })
           <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z" />
           <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
         </svg>
-        {busy === "google" ? "Opening Google..." : "Continue with Google"}
+        Continue with Google
+        <span className="rounded-full bg-forest-900/10 px-2 py-0.5 text-[0.6875rem] font-medium tracking-wide text-forest-900/70 uppercase">
+          Coming soon
+        </span>
       </button>
 
       <div className="my-7 flex items-center gap-4">
