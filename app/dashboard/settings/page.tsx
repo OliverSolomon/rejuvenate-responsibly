@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { SamplesPanel } from "@/components/dashboard/samples-panel";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { StoragePanel } from "@/components/dashboard/storage-panel";
@@ -7,10 +8,13 @@ import { modelCatalogue } from "@/lib/rmi/models";
 import { settingsView } from "@/lib/rmi/settings";
 import { countSamples, legacySummary, storageBackend, storageStatus } from "@/lib/rmi/store";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Settings",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Models, storage, email and sample data for Rate My Impact.",
+  path: "/dashboard/settings",
+  private: true,
+});
 
 export const dynamic = "force-dynamic";
 

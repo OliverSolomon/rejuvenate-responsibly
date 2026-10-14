@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Container, Section } from "@/components/ui/section";
 import { ContactForm } from "@/components/site/contact-form";
 import { site } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Contact us",
   description:
     "Talk to Rejuvenate Responsibly about ESG advisory, CSR programme design, reporting and the Rate My Impact assessment.",
-};
+  path: "/contact",
+});
 
 const intentMap: Record<string, string> = {
   rmi: "Rate My Impact assessment",

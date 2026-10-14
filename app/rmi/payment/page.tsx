@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { PaymentStatus } from "@/components/rmi/payment-status";
 import { Container, Section } from "@/components/ui/section";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Payment",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Pay for your Rate My Impact report.",
+  path: "/rmi/payment",
+  private: true,
+});
 
 export default async function PaymentPage({ searchParams }: PageProps<"/rmi/payment">) {
   const params = await searchParams;

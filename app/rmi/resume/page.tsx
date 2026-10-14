@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ResumeForm } from "@/components/rmi/resume-form";
 import { Container, Section } from "@/components/ui/section";
 import { Eyebrow } from "@/components/ui/eyebrow";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Resume your assessment",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Pick up your Rate My Impact assessment where you left off.",
+  path: "/rmi/resume",
+  private: true,
+});
 
 export default function ResumePage() {
   return (

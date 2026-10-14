@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import { getAssessment } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
 import { ReportEditor } from "@/components/dashboard/report-editor";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Edit report",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Edit the report before it is sent.",
+  path: "/dashboard/responses",
+  private: true,
+});
 
 export const dynamic = "force-dynamic";
 

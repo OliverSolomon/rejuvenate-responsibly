@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { SiteChrome } from "@/components/site/site-chrome";
 import { AdminBanner } from "@/components/site/admin-banner";
 import { site } from "@/lib/site";
+import { baseUrl } from "@/lib/seo";
 
 /* Self-hosted so the site has no runtime dependency on Google Fonts. */
 const body = localFont({
@@ -30,7 +31,11 @@ const serif = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(site.url),
+  metadataBase: new URL(baseUrl()),
+  applicationName: site.name,
+  authors: [{ name: site.name }],
+  creator: site.name,
+  alternates: { canonical: "/" },
   title: {
     default: `${site.name}. ${site.tagline}`,
     template: `%s | ${site.name}`,
@@ -47,17 +52,36 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_KE",
-    url: site.url,
+    url: "/",
     siteName: site.name,
     title: `${site.name}. ${site.tagline}`,
     description: site.description,
   },
-  twitter: { card: "summary_large_image", site: "@ReRejuvenate" },
+  twitter: {
+    card: "summary_large_image",
+    site: "@ReRejuvenate",
+    creator: "@ReRejuvenate",
+    title: `${site.name}. ${site.tagline}`,
+    description: site.description,
+  },
   robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {
   themeColor: "#0d2418",
+};
+
+const organisationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "ProfessionalService",
+  name: site.name,
+  description: site.description,
+  url: baseUrl(),
+  email: site.email,
+  telephone: site.phones[0],
+  address: { "@type": "PostalAddress", addressLocality: "Nairobi", addressCountry: "KE" },
+  areaServed: "East Africa",
+  sameAs: site.socials.map((s) => s.href),
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -67,6 +91,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${body.variable} ${display.variable} ${serif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bone-100 text-forest-900">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organisationJsonLd) }}
+        />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-100 focus:rounded-full focus:bg-forest-900 focus:px-5 focus:py-2.5 focus:text-sm focus:text-bone-50"

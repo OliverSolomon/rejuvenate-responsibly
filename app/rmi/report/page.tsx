@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ReportView } from "@/components/rmi/report-view";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Your report",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Your Rate My Impact sustainability report.",
+  path: "/rmi/report",
+  private: true,
+});
 
 export default async function ReportPage({ searchParams }: PageProps<"/rmi/report">) {
   const params = await searchParams;

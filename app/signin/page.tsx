@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { SignInForm } from "@/components/dashboard/sign-in-form";
 import { Container, Section } from "@/components/ui/section";
 import { Eyebrow } from "@/components/ui/eyebrow";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Sign in",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Sign in to the Rate My Impact admin dashboard.",
+  path: "/signin",
+  private: true,
+});
 
 export default async function SignInPage({ searchParams }: PageProps<"/signin">) {
   const params = await searchParams;

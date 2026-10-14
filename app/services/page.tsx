@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Container, Section } from "@/components/ui/section";
 import { Cta } from "@/components/home/cta";
 import { Media } from "@/components/ui/media";
 import { services } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Our services",
   description:
     "Sustainability strategy, ESG advisory, CSR programme design, reporting and disclosure, and sustainable finance, from a Nairobi based consultancy.",
-};
+  path: "/services",
+});
 
 
 export default function ServicesPage() {

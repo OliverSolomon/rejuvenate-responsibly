@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { analytics } from "@/lib/rmi/dashboard";
 import { Stat } from "@/components/dashboard/stat";
@@ -10,10 +11,13 @@ import {
   TierChart,
 } from "@/components/dashboard/charts";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Analytics",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Analytics across every organisation assessed with Rate My Impact.",
+  path: "/dashboard",
+  private: true,
+});
 
 export const dynamic = "force-dynamic";
 

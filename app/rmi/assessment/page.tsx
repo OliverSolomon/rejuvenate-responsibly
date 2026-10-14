@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { AssessmentFlow } from "@/components/rmi/assessment-flow";
 import { Container } from "@/components/ui/section";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Sustainability self-assessment",
   description:
     "The 53 question Rate My Impact self-assessment across governance, economic, environmental and social practice.",
-  robots: { index: false, follow: false },
-};
+  path: "/rmi/assessment",
+  private: true,
+});
 
 export default async function AssessmentPage({ searchParams }: PageProps<"/rmi/assessment">) {
   const params = await searchParams;

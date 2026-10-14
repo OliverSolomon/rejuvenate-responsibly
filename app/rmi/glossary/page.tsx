@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ButtonLink } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Container, Section } from "@/components/ui/section";
 import { glossary } from "@/lib/rmi/glossary";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Rate My Impact glossary",
   description:
     "Definitions and consistency checks for the terms used in the Rate My Impact Sustainability Self-Assessment.",
-};
+  path: "/rmi/glossary",
+});
 
 export default function GlossaryPage() {
   return (

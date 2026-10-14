@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Media } from "@/components/ui/media";
 import { Container, Section } from "@/components/ui/section";
 import { Cta } from "@/components/home/cta";
 import { values } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "About us",
   description:
     "Rejuvenate Responsibly is an advisory and consulting firm in Nairobi working at the intersection of business strategy and sustainable practice.",
-};
+  path: "/about",
+});
 
 export default function AboutPage() {
   return (

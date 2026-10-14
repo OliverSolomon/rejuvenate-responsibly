@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Media } from "@/components/ui/media";
 import { Container, Section } from "@/components/ui/section";
 import { Cta } from "@/components/home/cta";
 import { approachSteps, differentiators } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Why Rejuvenate",
   description:
     "Why organisations across East Africa choose Rejuvenate Responsibly for ESG and CSR advisory work.",
-};
+  path: "/why-rejuvenate",
+});
 
 export default function WhyPage() {
   return (

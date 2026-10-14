@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import { ButtonLink } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Media } from "@/components/ui/media";
@@ -8,11 +9,12 @@ import { ScoreDial } from "@/components/rmi/score-dial";
 import { SECTIONS, CLIENT_QUESTIONS, STAKEHOLDER_QUESTIONS } from "@/lib/rmi/questions";
 import { faqs } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Rate My Impact",
   description:
     "The RMI Sustainability Self-Assessment 2026 scores 53 weighted indicators across governance, economic, environmental and social practice, then checks your answers against your own stakeholders.",
-};
+  path: "/rmi",
+});
 
 const steps = [
   {

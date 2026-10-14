@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { organisationRows } from "@/lib/rmi/dashboard";
 import { Card } from "@/components/ui/card";
@@ -11,10 +12,13 @@ import {
   formatDate,
 } from "@/components/dashboard/status";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMeta({
   title: "Responses",
-  robots: { index: false, follow: false },
-};
+  description:
+    "Every organisation's assessment responses, by status.",
+  path: "/dashboard/responses",
+  private: true,
+});
 
 export const dynamic = "force-dynamic";
 
