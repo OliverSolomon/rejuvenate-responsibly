@@ -1,0 +1,187 @@
+
+name: Deploy Rejuvenate Responsibly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rejuvenate-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # 1. Get the source code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js for the build
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Build the production application
+      - name: Build Next.js
+        run: npm run build
+
+      # 5. Verify standalone output exists
+      - name: Verify standalone build
+        run: |
+          test -f .next/standalone/server.js || {
+            echo "ERROR: .next/standalone/server.js not found."
+            echo "Ensure next.config.js enables output: standalone."
+            exit 1
+          }
+
+      # 6. Configure SSH
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -eu
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          cat >> ~/.ssh/config <<'EOF'
+          Host production-vps
+            HostName ${{ secrets.SSH_HOST }}
+            User root
+            Port 693
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
+          EOF
+
+          chmod 600 ~/.ssh/config
+
+      # 7. Prepare the deployment directory
+      - name: Prepare VPS
+        run: |
+          ssh production-vps '
+            set -eu
+            mkdir -p /var/www/rejuvenateresponsibly.com/app
+            mkdir -p /var/www/rejuvenateresponsibly.com/app/public
+            test -f /etc/rejuvenateresponsibly.env || {
+              echo "ERROR: /etc/rejuvenateresponsibly.env is missing."
+              exit 1
+            }
+            docker info >/dev/null
+          '
+
+      # 8. Upload the standalone Next.js application
+      - name: Upload application
+        run: |
+          rsync -az --delete \
+            --exclude='.next/static/' \
+            -e 'ssh -F ~/.ssh/config' \
+            .next/standalone/ \
+            production-vps:/var/www/rejuvenateresponsibly.com/app/
+
+      # 9. Upload static assets
+      - name: Upload static assets
+        run: |
+          ssh production-vps \
+            'mkdir -p /var/www/rejuvenateresponsibly.com/app/.next/static'
+
+          rsync -az --delete \
+            -e 'ssh -F ~/.ssh/config' \
+            .next/static/ \
+            production-vps:/var/www/rejuvenateresponsibly.com/app/.next/static/
+
+      # 10. Upload public assets
+      - name: Upload public assets
+        run: |
+          if [ -d public ]; then
+            rsync -az --delete \
+              -e 'ssh -F ~/.ssh/config' \
+              public/ \
+              production-vps:/var/www/rejuvenateresponsibly.com/app/public/
+          fi
+
+      # 11. Restart the production container
+      - name: Deploy Docker container
+        run: |
+          ssh production-vps <<'ENDSSH'
+          set -eu
+
+          APP_DIR="/var/www/rejuvenateresponsibly.com/app"
+          CONTAINER="rejuvenateresponsibly"
+          IMAGE="node:22-bookworm-slim"
+
+          cd "$APP_DIR"
+
+          # Confirm the uploaded server exists.
+          test -f server.js
+
+          # Pull the runtime image.
+          docker pull "$IMAGE"
+
+          # Replace the existing application container.
+          docker rm -f "$CONTAINER" 2>/dev/null || true
+
+          docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            --init \
+            --env-file /etc/rejuvenateresponsibly.env \
+            -e NODE_ENV=production \
+            -e PORT=3000 \
+            -e HOSTNAME=0.0.0.0 \
+            -p 127.0.0.1:3000:3000 \
+            -v "$APP_DIR:/app" \
+            -w /app \
+            "$IMAGE" \
+            node server.js
+
+          echo "Waiting for the application to start..."
+
+          # Allow up to 60 seconds for startup.
+          for i in $(seq 1 30); do
+            if curl -fsS \
+              --max-time 3 \
+              http://127.0.0.1:3000/ \
+              -o /dev/null; then
+              echo "Deployment successful."
+              docker ps --filter "name=$CONTAINER"
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "ERROR: Application health check failed."
+          docker logs --tail 100 "$CONTAINER"
+          exit 1
+          ENDSSH
+
+      # 12. Verify the deployed application
+      - name: Verify deployment
+        run: |
+          ssh production-vps '
+            set -eu
+            curl -fsS --max-time 10 \
+              http://127.0.0.1:3000/ -o /dev/null
+            echo "Production application is responding."
+          '
