@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAssessment } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
@@ -12,6 +11,10 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Full page: the dashboard's top bar stays, with Back leading to the
+ * organisation, and the editor takes everything beneath it.
+ */
 export default async function EditReportPage({
   params,
 }: PageProps<"/dashboard/responses/[id]/edit">) {
@@ -20,22 +23,11 @@ export default async function EditReportPage({
   if (!assessment?.report || !user) notFound();
 
   return (
-    <div>
-      <Link
-        href={`/dashboard/responses/${id}`}
-        className="text-[0.8125rem] text-forest-900/55 underline-offset-4 hover:underline"
-      >
-        Back to {assessment.profile.organisation || id}
-      </Link>
-      <h1 className="display mt-4 text-[clamp(1.625rem,3.2vw,2.25rem)]">Edit report</h1>
-      <div className="mt-6">
-        <ReportEditor
-          assessmentId={id}
-          organisation={assessment.profile.organisation || id}
-          markdown={assessment.report.markdown}
-          editorName={user.name || user.email}
-        />
-      </div>
-    </div>
+    <ReportEditor
+      assessmentId={id}
+      organisation={assessment.profile.organisation || id}
+      markdown={assessment.report.markdown}
+      editorName={user.name || user.email}
+    />
   );
 }

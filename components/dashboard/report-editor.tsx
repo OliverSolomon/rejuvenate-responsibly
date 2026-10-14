@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 // From `/core`, not the package root: the root re-exports `WordcraftEditor` as
@@ -17,12 +17,27 @@ const WordcraftEditor = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[720px] items-center justify-center rounded-card border border-forest-900/10 bg-bone-50">
+      <div className="flex h-[70vh] items-center justify-center bg-bone-50">
         <p className="text-[0.875rem] text-forest-900/55">Starting the editor</p>
       </div>
     ),
   },
 );
+
+/** Height of the browser window, so the editor can fill the page under the top bar. */
+function useViewportHeight(): number {
+  return useSyncExternalStore(
+    (notify) => {
+      window.addEventListener("resize", notify);
+      return () => window.removeEventListener("resize", notify);
+    },
+    () => window.innerHeight,
+    () => 800,
+  );
+}
+
+// The dashboard's top bar (about 65px) and the strip above the editor (about 57px).
+const CHROME = 122;
 
 type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved"; at: string } | { kind: "error"; message: string };
 
@@ -40,6 +55,7 @@ export function ReportEditor({
   const router = useRouter();
   const editorRef = useRef<Editor>(null);
   const [state, setState] = useState<SaveState>({ kind: "idle" });
+  const height = Math.max(480, useViewportHeight() - CHROME);
 
   // Built once. A new object here would reload the document and throw away
   // whatever the person had typed.
@@ -93,11 +109,15 @@ export function ReportEditor({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[0.8125rem] text-forest-900/55">
-          Editing the report for {organisation}. Saving replaces what the reader sees;
-          the original wording is kept underneath.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-forest-900/10 bg-bone-50 px-5 py-3 sm:px-8">
+        <div className="min-w-0">
+          <p className="truncate text-[0.9375rem] font-medium text-forest-900">
+            Edit report <span className="text-forest-900/45">· {organisation}</span>
+          </p>
+          <p className="text-[0.75rem] text-forest-900/50">
+            Saving replaces what the reader sees. The original wording is kept underneath.
+          </p>
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-[0.8125rem] text-forest-900/55" role="status">
             {state.kind === "saving" && "Saving"}
@@ -124,11 +144,11 @@ export function ReportEditor({
         user={{ name: editorName }}
         wasmUrl="/wordcraft/wordcraft_embed_bg.wasm"
         autoSave={false}
-        height={760}
+        height={height}
         tabs={["File", "Home", "Insert", "Layout", "Review", "View"]}
         onSave={onSave}
         fallback={(error) => (
-          <div className="rounded-card border border-forest-900/10 bg-bone-50 p-8">
+          <div className="m-6 rounded-card border border-forest-900/10 bg-bone-50 p-8">
             <p className="display text-[1.0625rem]">The editor could not start</p>
             <p className="mt-2 max-w-[52ch] text-[0.875rem] leading-relaxed text-forest-900/60">
               It needs WebGPU or WebGL2. Try a current Chrome, Edge or Firefox with

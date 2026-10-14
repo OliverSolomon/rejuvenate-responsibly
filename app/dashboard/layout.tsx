@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getDashboardUser } from "@/utils/supabase/server";
+import { BackLink } from "@/components/dashboard/back-link";
+import { DashboardMain } from "@/components/dashboard/main";
 import { DashboardNav } from "@/components/dashboard/nav";
 import { LogoMark } from "@/components/ui/logo";
 
@@ -17,14 +19,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-40 border-b border-forest-900/10 bg-bone-100/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3 sm:px-8">
           <div className="flex items-center gap-3 sm:gap-4">
-            <Link
-              href="/"
-              className="flex items-center gap-1.5 rounded-full border border-forest-900/15 px-3.5 py-2 text-[0.8125rem] text-forest-900/65 transition-colors hover:border-forest-900/40 hover:text-forest-900"
-            >
-              <span aria-hidden>←</span>
-              <span className="hidden sm:inline">Back to website</span>
-              <span className="sm:hidden">Website</span>
-            </Link>
+            <BackLink />
             <span
               aria-hidden
               className="hidden h-6 w-px bg-forest-900/12 sm:block"
@@ -44,7 +39,7 @@ export default async function DashboardLayout({
           <DashboardNav email={user.email} name={user.name} />
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8">{children}</main>
+      <DashboardMain>{children}</DashboardMain>
     </div>
   );
 }

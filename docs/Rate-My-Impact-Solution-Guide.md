@@ -9,7 +9,7 @@ date: "14 October 2026"
 
 **Prepared for:** Rejuvenate Responsibly, Nairobi, Kenya
 **Prepared by:** Oliver Wainaina
-**Version:** 1.0
+**Version:** 1.1
 **Date:** 14 October 2026
 
 ---
@@ -39,6 +39,7 @@ date: "14 October 2026"
 21. Glossary
 - Appendix A: The 53 client questions
 - Appendix B: The 40 stakeholder questions
+- Document history
 
 ---
 
@@ -610,7 +611,7 @@ The dashboard is for the Rejuvenate team only, at the address `/dashboard` on th
 
 The dashboard has its own top bar, separate from the public site:
 
-- **Back to website** at the far left, before the logo.
+- **Back to website** at the far left, before the logo. On the report editor this button changes to **Back** and returns to the organisation being edited.
 - The logo and "Dashboard" label.
 - **Analytics**, **Responses**, **Settings**.
 - The administrator's name and **Sign out**.
@@ -649,11 +650,13 @@ Pressing **Inform the submitter** opens the message in an editor, prefilled with
 
 ### 12.7 Editing a report
 
-The editor shows the report text for editing, with the original always preserved. Saving marks the report as issued and records who edited it and when.
+The editor opens as a **full page**. The dashboard's top bar stays in place, with **Back** at the far left returning to the organisation, and the editor fills everything beneath it, resizing with the window. A slim strip above the document names the organisation and holds the save button and a "Saved at" note.
+
+The original generated text is always preserved underneath. Saving replaces what the reader sees, marks the report as issued, and records who edited it and when.
 
 ### 12.8 Sample submissions
 
-Settings includes a panel that loads 16 invented organisations so the dashboard, report flow and edge cases can be tried without real clients. They cover:
+Settings includes a **Sample submissions** switch that loads 16 invented organisations so the dashboard, report flow and edge cases can be tried without real clients. Each is labelled **[Sample]** in its name, so it can never be mistaken for a real client. They cover:
 
 - every payment state (unpaid, pending, failed, waived, paid);
 - all four tiers, including a perfect score and a zero score;
@@ -663,7 +666,11 @@ Settings includes a panel that loads 16 invented organisations so the dashboard,
 - awkward inputs: blank fields, an organisation name containing symbols and accents, a very long name, a perfectly split vote;
 - the unpaid submission that the free preview allows.
 
-Sample records are flagged. **Remove samples** deletes only those and leaves real records alone. All their email addresses are on example.org, which cannot receive mail, and no email is sent when they are loaded.
+**The switch.** Turning it **on** loads the samples. Turning it **off** asks for confirmation and then removes every sample submission, along with their invitations, responses and reports. Real submissions are never touched, because only records flagged as samples are removed. A **Reset the samples** button puts them back to their original state after experimenting.
+
+**Why some names look odd.** One sample, RMI-SMP013, is deliberately given an organisation name full of symbols and accents (an ampersand, angle brackets, quotation marks) and blank contact fields. It exists to prove that unusual names display and print correctly, so its report title looks strange on purpose. Another is deliberately very long. Anything marked [Sample] disappears when the switch is turned off.
+
+**Safety.** All sample email addresses are on example.org, which cannot receive mail, and no email is sent when they are loaded. Sample submissions appear in Analytics, the Responses list and the delivery alert like any other, so switch them off before judging real figures.
 
 ---
 
@@ -679,7 +686,7 @@ Settings (in the dashboard) gathers everything that previously needed a develope
 | **Testing** | **Require payment before an assessment** (on or off) | Turn off for testing. Assessments opened while off are marked "waived" and never counted as paid. Switch back on before launch |
 | **Payments (Pesapal)** | Consumer key, consumer secret, environment (sandbox or live), optional IPN id | Keys are write-only |
 | **Report writing (OpenRouter)** | API key, drafting model, humaniser model | Models are chosen from a dropdown with prices, or typed |
-| **Samples** | Load or remove the sample submissions | |
+| **Samples** | A switch that loads or removes the sample submissions | Off removes every sample, and only samples |
 
 ### 13.2 Choosing models
 
@@ -808,6 +815,10 @@ The stakeholder invitation promises the person's answers are "never attributed t
 | 26 | **Public pages stay fast and static** | The banner asks the server on demand rather than making every page personal |
 | 27 | **Email through Mailtrap, with a test inbox mode** | Nothing reaches a real person until the team decides |
 | 28 | **No automatic retry or resend of stakeholder invitations** | Kept simple at launch; replaced by visibility plus a notice to the client (see Section 17) |
+| 29 | **The report editor is a full page with the top bar kept** | Editing a long document in a narrow column was cramped. Keeping the bar means the administrator never loses their place in the dashboard |
+| 30 | **The left button says "Back" on the editor** | "Back to website" would throw the administrator out of the dashboard mid-edit; Back returns them to the organisation they came from |
+| 31 | **Sample data is a single on and off switch, and every sample is labelled [Sample]** | Mock records must be unmistakable and removable in one move before real clients arrive, without any risk to real data |
+| 32 | **Sample records use properly formed ids** | The database rejects ids that are not valid identifiers; found and fixed when samples were first loaded into Supabase |
 
 ---
 
@@ -869,7 +880,7 @@ These are honest gaps, collected in one place so they can be decided deliberatel
 
 **An invitation did not arrive.** Open the organisation, press **Inform the submitter**, adjust the wording if you like, and send. When the client replies with a corrected address, the invitation currently needs to be re-sent through the client (they can use "Add more people" on their results page).
 
-**Edit a report before it goes out.** Open the organisation, **Edit report**, make changes, save. The original is kept.
+**Edit a report before it goes out.** Open the organisation, **Edit report**. The editor opens as a full page; make changes, **Save report**, then press **Back** to return to the organisation. The original is kept.
 
 **Test without taking payment.** Settings, Testing, switch off **Require payment**. Remember to switch it back on.
 
@@ -877,7 +888,9 @@ These are honest gaps, collected in one place so they can be decided deliberatel
 
 **Rotate a key** (Pesapal or OpenRouter). Settings, paste the new value into the field, Save. Tick "Remove the saved value" instead to hand control back to the server's settings.
 
-**Try the dashboard with data.** Settings, Sample submissions, **Load samples**. When done, **Remove samples**.
+**Try the dashboard with data.** Settings, Sample submissions, switch on. When done, switch it off and confirm; every sample submission is removed and real records are left alone.
+
+**Get rid of the mock data before launch.** Settings, Sample submissions, switch off. Then check Analytics: the totals should show only real organisations.
 
 **The dashboard shows nothing.** Open Settings and read the Storage card. It says which store is active, whether the database is ready, and how many records it holds. An empty database shows zeros; load the samples or import earlier data.
 
@@ -1101,4 +1114,13 @@ Stakeholders answer the first-level yes or no only. Weights are within the stake
 
 ---
 
-*Rate My Impact: Solution Guide. Prepared by Oliver Wainaina for Rejuvenate Responsibly. Version 1.0, 14 October 2026.*
+## Document history
+
+| Version | Date | Changes |
+| --- | --- | --- |
+| 1.0 | 14 October 2026 | First complete guide |
+| 1.1 | 14 October 2026 | Report editor as a full page with a context-aware Back button; sample submissions as one on and off switch; explanation of the deliberately unusual sample names; decisions 29 to 32 |
+
+---
+
+*Rate My Impact: Solution Guide. Prepared by Oliver Wainaina for Rejuvenate Responsibly. Version 1.1, 14 October 2026.*
