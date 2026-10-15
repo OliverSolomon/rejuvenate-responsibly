@@ -46,6 +46,9 @@ next-env.d.ts
 # design reference screenshots, not part of the site
 /public/*.webp
 
+# server env with live secrets (not matched by .env*)
+/rejuvenateresponsibly.env
+
 # but keep the documented example
 !.env.example
 

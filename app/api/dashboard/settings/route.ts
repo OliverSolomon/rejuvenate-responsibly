@@ -4,6 +4,7 @@ import {
   settingsView,
   type SettingsUpdate,
 } from "@/lib/rmi/settings";
+import { isEmailKind, type EmailKind } from "@/lib/rmi/email-kinds";
 import { SecretsUnavailableError } from "@/lib/rmi/secrets";
 import { getDashboardUser } from "@/utils/supabase/server";
 
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 const MODEL = /^[\w.~:/-]{1,100}$/;
 const IPN = /^[\w-]{1,64}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const SECRET_MAX = 512;
 
 type Raw = Record<string, unknown>;
@@ -37,6 +39,34 @@ function parse(body: unknown): { update: SettingsUpdate } | { error: string } {
     }
     update.requirePayment = body.requirePayment;
   }
+
+  if ("emailEnabled" in body) {
+    if (typeof body.emailEnabled !== "boolean") {
+      return { error: "emailEnabled must be true or false." };
+    }
+    update.emailEnabled = body.emailEnabled;
+  }
+
+  if ("emailKinds" in body) {
+    if (!isObject(body.emailKinds)) return { error: "emailKinds must be an object." };
+    const kinds: Partial<Record<EmailKind, boolean>> = {};
+    for (const [key, value] of Object.entries(body.emailKinds)) {
+      if (!isEmailKind(key) || typeof value !== "boolean") {
+        return { error: `${key} is not a switch that can be set.` };
+      }
+      kinds[key] = value;
+    }
+    update.emailKinds = kinds;
+  }
+
+  const contactInbox = field(body, "contactInbox");
+  if (
+    contactInbox === "invalid" ||
+    (typeof contactInbox === "string" && contactInbox.trim() && !EMAIL.test(contactInbox.trim()))
+  ) {
+    return { error: "That does not look like an email address." };
+  }
+  if (contactInbox !== undefined) update.contactInbox = contactInbox;
 
   const pesapal = isObject(body.pesapal) ? body.pesapal : undefined;
   const openrouter = isObject(body.openrouter) ? body.openrouter : undefined;
@@ -110,6 +140,22 @@ export async function PUT(request: Request) {
   const parsed = parse(body);
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+
+  // Changing, rotating or clearing a payment or AI key, or the Pesapal
+  // environment, affects live money and spend. The form makes the admin tick an
+  // acknowledgement; this makes sure a direct API call cannot skip it.
+  const { pesapal, openrouter } = parsed.update;
+  const sensitive =
+    pesapal?.consumerKey !== undefined ||
+    pesapal?.consumerSecret !== undefined ||
+    pesapal?.env !== undefined ||
+    openrouter?.apiKey !== undefined;
+  if (sensitive && !(isObject(body) && body.acknowledged === true)) {
+    return NextResponse.json(
+      { error: "Confirm that you understand this change before saving a key or the payment environment." },
+      { status: 400 },
+    );
   }
 
   try {

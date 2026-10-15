@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { EmailKind } from "./email-kinds";
 import type { Answers } from "./scoring";
 
 /**
@@ -99,6 +100,12 @@ export type Report = {
  */
 export type StoredSettings = {
   requirePayment?: boolean;
+  /** Master switch for outbound email. Unset means on. */
+  emailEnabled?: boolean;
+  /** Per-kind switches. A kind that is absent is on; false turns just that kind off. */
+  emailKinds?: Partial<Record<EmailKind, boolean>>;
+  /** Where contact form enquiries are delivered. */
+  contactInbox?: string;
   pesapal?: {
     consumerKey?: string;
     consumerSecret?: string;

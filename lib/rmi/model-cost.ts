@@ -42,8 +42,15 @@ export function reportCost(draft?: ModelPrice, humanizer?: ModelPrice): ReportCo
   return { draft: d, humanizer: h, total: d !== null && h !== null ? d + h : null };
 }
 
-export function formatUsd(amount: number): string {
-  if (amount < 0.001) return "under $0.001";
-  if (amount < 0.1) return `$${amount.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
-  return `$${amount.toFixed(2)}`;
+/** Shillings for an amount in dollars. Sub-shilling costs keep their decimals. */
+export function formatKes(usd: number, kesPerUsd: number): string {
+  const kes = usd * kesPerUsd;
+  if (kes < 0.01) return "under KES 0.01";
+  if (kes < 10) return `KES ${kes.toFixed(2)}`;
+  return `KES ${kes.toLocaleString("en-KE", { maximumFractionDigits: kes < 1000 ? 1 : 0 })}`;
+}
+
+/** Cost of one call with this model, for a role that reads `inTokens` and writes `outTokens`. */
+export function callCostUsd(inTokens: number, outTokens: number, p: ModelPrice): number {
+  return callCost(inTokens, outTokens, p);
 }

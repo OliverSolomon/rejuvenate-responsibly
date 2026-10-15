@@ -12,7 +12,11 @@
  * is on its way.
  */
 
-export type Mail = { to: string; subject: string; text: string };
+import type { EmailKind } from "./email-kinds";
+import { emailAllowed } from "./settings";
+
+/** `kind` decides which dashboard switch governs this message. */
+export type Mail = { kind: EmailKind; to: string; subject: string; text: string };
 export type Delivery = { ok: boolean; queued: boolean; error?: string };
 
 const SENDING = "https://send.api.mailtrap.io/api/send";
@@ -35,6 +39,17 @@ function sender(): { email: string; name: string } {
 }
 
 export async function send(mail: Mail): Promise<Delivery> {
+  // The dashboard switch. Reported like a missing token (not queued, not an
+  // error) so the UI tells people to pass links on by hand.
+  if (!(await emailAllowed(mail.kind))) {
+    console.info("[rmi:mail] email is switched off, message not sent", {
+      kind: mail.kind,
+      to: mail.to,
+      subject: mail.subject,
+    });
+    return { ok: true, queued: false };
+  }
+
   const token = process.env.MAILTRAP_TOKEN;
 
   if (!token) {

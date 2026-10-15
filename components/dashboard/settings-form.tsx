@@ -1,15 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  formatUsd,
+  callCostUsd,
+  formatKes,
   REPORT_TOKENS,
   reportCost,
   type ModelPrice,
 } from "@/lib/rmi/model-cost";
+import { EMAIL_KINDS, type EmailKind } from "@/lib/rmi/email-kinds";
+import type { FxRate } from "@/lib/rmi/fx";
 import type { SecretView, SettingsView, Source, TextView } from "@/lib/rmi/settings";
 
 const SOURCE_LABEL: Record<Source, string> = {
@@ -99,9 +102,11 @@ function SecretField({
       label={label}
       tag={<SourceTag source={view.source} extra={tail} />}
       hint={
-        view.unreadable
-          ? "A saved value exists but could not be decrypted, because RMI_SETTINGS_KEY changed or is missing. Enter it again to replace it."
-          : "Write-only. Once saved it is encrypted and cannot be shown again."
+        value.trim() || clear
+          ? "This replaces the live key as soon as you save. Revoke the old one at the provider afterwards."
+          : view.unreadable
+            ? "A saved value exists but could not be decrypted, because RMI_SETTINGS_KEY changed or is missing. Enter it again to replace it."
+            : "Write-only. Once saved it is encrypted and cannot be shown again. Enter a new value to rotate it."
       }
     >
       <input
@@ -157,16 +162,46 @@ function TextField({
   );
 }
 
-const OTHER = "__other__";
-const perM = (n: number) => `${n.toFixed(2)}`;
+type Role = { inTokens: number; outTokens: number };
 
-/** A dropdown of known models with their prices, plus a way to type any other. */
-function ModelSelect({
+const DRAFT_ROLE: Role = { inTokens: REPORT_TOKENS.draftIn, outTokens: REPORT_TOKENS.draftOut };
+const HUMANIZER_ROLE: Role = {
+  inTokens: REPORT_TOKENS.humanizerIn,
+  outTokens: REPORT_TOKENS.humanizerOut,
+};
+
+/** "deepseek/deepseek-v4-flash" -> provider "deepseek", name "deepseek-v4-flash". */
+function splitModel(id: string): { provider: string; name: string } {
+  const i = id.indexOf("/");
+  return i === -1 ? { provider: "", name: id } : { provider: id.slice(0, i), name: id.slice(i + 1) };
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  google: "Google",
+  deepseek: "DeepSeek",
+  qwen: "Qwen",
+  "z-ai": "Z.ai",
+  mistralai: "Mistral",
+  "meta-llama": "Meta",
+};
+
+const providerLabel = (p: string) => PROVIDER_LABEL[p] ?? p;
+
+/**
+ * A model chooser that shows what each choice costs in shillings: per report
+ * for the job it would do here, and per million tokens for comparison with the
+ * provider's own price list. Cheapest first.
+ */
+function ModelPicker({
   label,
   view,
   value,
   onValue,
   models,
+  fx,
+  role,
   hint,
 }: {
   label: string;
@@ -174,52 +209,166 @@ function ModelSelect({
   value: string;
   onValue: (v: string) => void;
   models: ModelPrice[];
+  fx: FxRate;
+  role: Role;
   hint?: string;
 }) {
-  const known = models.some((m) => m.id === value);
-  const [typing, setTyping] = useState(!known && value !== "");
-  const showInput = typing || !known;
-  const price = models.find((m) => m.id === value);
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+
+  const rows = models
+    .map((m) => ({ m, cost: callCostUsd(role.inTokens, role.outTokens, m) }))
+    .sort((a, b) => a.cost - b.cost);
+  const cheapest = rows[0]?.m.id;
+  const current = models.find((m) => m.id === value);
+  const currentCost = current ? callCostUsd(role.inTokens, role.outTokens, current) : null;
+  const { provider, name } = splitModel(value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  function move(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      setOpen(false);
+      (root.current?.querySelector("[data-trigger]") as HTMLElement | null)?.focus();
+      return;
+    }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const items = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-option]") ?? []);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next = e.key === "ArrowDown" ? Math.min(at + 1, items.length - 1) : Math.max(at - 1, 0);
+    items[next]?.focus();
+    e.preventDefault();
+  }
+
+  function choose(id: string) {
+    onValue(id);
+    setOpen(false);
+  }
 
   return (
-    <Row
-      label={label}
-      tag={<SourceTag source={view.source} />}
-      hint={
-        price
-          ? `${perM(price.inPerM)} in, ${perM(price.outPerM)} out per million tokens. ${hint ?? ""}`
-          : `Price unknown for this model, so it is left out of the estimate below. ${hint ?? ""}`
-      }
-    >
-      <select
-        value={showInput ? OTHER : value}
-        onChange={(e) => {
-          if (e.target.value === OTHER) {
-            setTyping(true);
-          } else {
-            setTyping(false);
-            onValue(e.target.value);
-          }
-        }}
-        className={inputClass}
-      >
-        {models.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.id} · {perM(m.inPerM)} in / {perM(m.outPerM)} out
-          </option>
-        ))}
-        <option value={OTHER}>Other model (type its name)</option>
-      </select>
-      {showInput && (
-        <input
-          type="text"
-          value={value}
-          spellCheck={false}
-          placeholder="provider/model-name"
-          onChange={(e) => onValue(e.target.value)}
-          className={inputClass}
-        />
-      )}
+    <Row label={label} tag={<SourceTag source={view.source} />} hint={hint}>
+      <div ref={root} className="relative" onKeyDown={open ? move : undefined}>
+        <button
+          type="button"
+          data-trigger
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-3 rounded-xl border border-forest-900/15 bg-bone-50 px-3.5 py-2.5 text-left transition-colors hover:border-forest-900/30"
+        >
+          <span className="min-w-0">
+            <span className="block truncate text-[0.9375rem] font-medium text-forest-900">
+              {name || "Choose a model"}
+            </span>
+            <span className="block truncate text-[0.75rem] text-forest-900/55">
+              {provider ? providerLabel(provider) : ""}
+              {currentCost !== null
+                ? ` · about ${formatKes(currentCost, fx.kesPerUsd)} per report`
+                : provider
+                  ? " · price unknown, left out of the estimate"
+                  : ""}
+            </span>
+          </span>
+          <svg
+            aria-hidden
+            viewBox="0 0 20 20"
+            className={`h-4 w-4 shrink-0 text-forest-900/50 transition-transform ${open ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+          >
+            <path d="m5 8 5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {open && (
+          <div
+            role="listbox"
+            aria-label={label}
+            className="absolute z-20 mt-2 max-h-[22rem] w-full overflow-auto rounded-2xl border border-forest-900/15 bg-bone-50 p-1.5 shadow-[0_12px_32px_-12px_rgba(0,0,0,0.28)]"
+          >
+            {rows.map(({ m, cost }) => {
+              const s = splitModel(m.id);
+              const selected = m.id === value;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  data-option
+                  onClick={() => choose(m.id)}
+                  className={`flex w-full items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-900/30 ${
+                    selected ? "bg-forest-900/[0.07]" : "hover:bg-forest-900/[0.04]"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-[0.875rem] font-medium text-forest-900">
+                        {s.name}
+                      </span>
+                      {m.id === cheapest && <Badge tone="good">Cheapest</Badge>}
+                    </span>
+                    <span className="mt-0.5 block text-[0.75rem] text-forest-900/55">
+                      {providerLabel(s.provider)} · {formatKes(m.inPerM, fx.kesPerUsd)} in /{" "}
+                      {formatKes(m.outPerM, fx.kesPerUsd)} out per 1M tokens
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[0.875rem] font-medium text-forest-900">
+                      {formatKes(cost, fx.kesPerUsd)}
+                    </span>
+                    <span className="block text-[0.6875rem] text-forest-900/50">per report</span>
+                  </span>
+                </button>
+              );
+            })}
+
+            <div className="mt-1.5 border-t border-forest-900/10 p-2.5">
+              <label className="text-[0.75rem] font-medium text-forest-900/65" htmlFor={`custom-${label}`}>
+                Use another model
+              </label>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  id={`custom-${label}`}
+                  type="text"
+                  value={custom}
+                  spellCheck={false}
+                  placeholder="provider/model-name"
+                  onChange={(e) => setCustom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && custom.trim()) {
+                      e.preventDefault();
+                      choose(custom.trim());
+                    }
+                  }}
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-forest-900/15 bg-bone-50 px-3 text-[0.875rem] text-forest-900 placeholder:text-forest-900/35"
+                />
+                <button
+                  type="button"
+                  disabled={!custom.trim()}
+                  onClick={() => choose(custom.trim())}
+                  className="h-10 rounded-lg bg-forest-900 px-4 text-[0.8125rem] font-medium text-bone-50 disabled:opacity-40"
+                >
+                  Use
+                </button>
+              </div>
+              <p className="mt-1.5 text-[0.6875rem] text-forest-900/45">
+                Exactly as OpenRouter names it. Its price is not known here, so it is left out of the
+                estimate.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </Row>
   );
 }
@@ -229,14 +378,17 @@ function CostSummary({
   humanizerId,
   models,
   source,
+  fx,
 }: {
   draftId: string;
   humanizerId: string;
   models: ModelPrice[];
   source: "live" | "built-in";
+  fx: FxRate;
 }) {
   const find = (id: string) => models.find((m) => m.id === id);
   const cost = reportCost(find(draftId), find(humanizerId));
+  const rate = fx.kesPerUsd;
   const before = reportCost(find("anthropic/claude-sonnet-4.5"), undefined).draft;
 
   return (
@@ -247,13 +399,13 @@ function CostSummary({
       {cost.total !== null ? (
         <>
           <p className="mt-1 font-[family-name:var(--font-serif)] text-[1.875rem] leading-none text-forest-900">
-            {formatUsd(cost.total)}
+            {formatKes(cost.total, rate)}
           </p>
           <p className="mt-2 text-[0.8125rem] text-forest-900/65">
-            Drafting {formatUsd(cost.draft!)} plus humaniser {formatUsd(cost.humanizer!)}. About{" "}
-            {formatUsd(cost.total * 1000)} for 1,000 reports.
+            Drafting {formatKes(cost.draft!, rate)} plus humaniser {formatKes(cost.humanizer!, rate)}.
+            About {formatKes(cost.total * 1000, rate)} for 1,000 reports.
             {before !== null && cost.total < before
-              ? ` Before, drafting alone on Claude Sonnet 4.5 was about ${formatUsd(before)}.`
+              ? ` Before, drafting alone on Claude Sonnet 4.5 was about ${formatKes(before, rate)}.`
               : ""}
           </p>
         </>
@@ -268,10 +420,100 @@ function CostSummary({
         {REPORT_TOKENS.draftIn.toLocaleString("en-GB")} tokens and writes about{" "}
         {REPORT_TOKENS.draftOut.toLocaleString("en-GB")}; the humaniser reads about{" "}
         {REPORT_TOKENS.humanizerIn.toLocaleString("en-GB")} (its rules plus the draft) and writes
-        about {REPORT_TOKENS.humanizerOut.toLocaleString("en-GB")}. Prices are{" "}
+        about {REPORT_TOKENS.humanizerOut.toLocaleString("en-GB")}. OpenRouter bills in US dollars;
+        shown here at KES {rate.toFixed(2)} to the dollar
+        {fx.source === "live"
+          ? `, from ${fx.provider}${fx.asOf ? ` (${new Date(fx.asOf).toLocaleDateString("en-GB")})` : ""}`
+          : ", a built-in estimate, as no exchange-rate source could be reached"}
+        . Model prices are{" "}
         {source === "live" ? "live from OpenRouter" : "built-in figures, as OpenRouter could not be reached"}
         . Retries after a failed check cost extra.
+        {fx.provider === "ExchangeRate-API" && (
+          <>
+            {" "}
+            <a
+              href="https://www.exchangerate-api.com"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Rates by Exchange Rate API
+            </a>
+            .
+          </>
+        )}
       </p>
+    </div>
+  );
+}
+
+function Switch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative h-7 w-12 rounded-full transition-colors disabled:opacity-60 ${
+        checked ? "bg-forest-900" : "bg-forest-900/25"
+      }`}
+    >
+      <span
+        className={`absolute top-1 h-5 w-5 rounded-full bg-bone-50 transition-all ${
+          checked ? "left-6" : "left-1"
+        }`}
+      />
+    </button>
+  );
+}
+
+/** Shown whenever a key is being replaced, removed or the payment mode changed. */
+function RotationWarning({ goingLive }: { goingLive: boolean }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-2xl border border-clay-400/40 bg-clay-400/10 p-4 text-[0.875rem] leading-relaxed text-clay-500"
+    >
+      <p className="font-medium">You are changing a live key. Read this before saving.</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        <li>
+          The change takes effect on the next request. A wrong or revoked key stops payments or
+          report writing straight away.
+        </li>
+        <li>
+          Pesapal keys decide where customers&apos; money goes. Only paste keys from the
+          organisation&apos;s own merchant account.
+        </li>
+        <li>
+          OpenRouter keys spend real credit on every report. A leaked key can be used by anyone.
+        </li>
+        <li>
+          Saving does not cancel the old key at the provider. After rotating, revoke the old key in
+          Pesapal or OpenRouter yourself.
+        </li>
+        <li>
+          Keys are write-only: once saved they are encrypted and cannot be shown again, so keep a
+          copy somewhere safe.
+        </li>
+        {goingLive && (
+          <li>
+            <strong>Live mode moves real money.</strong> Confirm the merchant account is approved
+            and a test payment has worked in sandbox first.
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
@@ -283,16 +525,22 @@ export function SettingsForm({
   initial,
   models,
   pricesFrom,
+  fx,
 }: {
   initial: SettingsView;
   models: ModelPrice[];
   pricesFrom: "live" | "built-in";
+  fx: FxRate;
 }) {
   const router = useRouter();
   const [view, setView] = useState(initial);
 
   const [required, setRequired] = useState(initial.requirePayment.value);
+  const [emailOn, setEmailOn] = useState(initial.emailEnabled.value);
+  const [kinds, setKinds] = useState(initial.emailKinds);
   const [switching, setSwitching] = useState(false);
+
+  const [inbox, setInbox] = useState(initial.contactInbox.value);
 
   const [pesapalEnv, setPesapalEnv] = useState(initial.pesapal.env.value);
   const [ipnId, setIpnId] = useState(initial.pesapal.ipnId.value);
@@ -304,6 +552,7 @@ export function SettingsForm({
   const [apiKey, setApiKey] = useState<Secrets>(blankSecret);
 
   const [saving, setSaving] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   async function put(body: unknown): Promise<SettingsView> {
@@ -317,21 +566,39 @@ export function SettingsForm({
     return data.settings as SettingsView;
   }
 
-  async function toggle(next: boolean) {
+  /** Saves a switch straight away, and puts it back if the save fails. */
+  async function flip(
+    patch:
+      | { requirePayment: boolean }
+      | { emailEnabled: boolean }
+      | { emailKinds: Partial<Record<EmailKind, boolean>> },
+    set: (v: boolean) => void,
+    previous: boolean,
+    next: boolean,
+  ) {
     setSwitching(true);
     setMessage(null);
-    const previous = required;
-    setRequired(next);
+    set(next);
     try {
-      setView(await put({ requirePayment: next }));
+      setView(await put(patch));
       router.refresh();
     } catch (err) {
-      setRequired(previous);
+      set(previous);
       setMessage({ kind: "error", text: err instanceof Error ? err.message : "Could not save." });
     } finally {
       setSwitching(false);
     }
   }
+
+  // Replacing or removing a key, or changing the payment environment, needs an
+  // explicit acknowledgement before it can be saved.
+  const envChanged = pesapalEnv !== view.pesapal.env.value;
+  const sensitive =
+    Boolean(consumerKey.value.trim() || consumerKey.clear) ||
+    Boolean(consumerSecret.value.trim() || consumerSecret.clear) ||
+    Boolean(apiKey.value.trim() || apiKey.clear) ||
+    envChanged;
+  const goingLive = envChanged && pesapalEnv === "live";
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -345,6 +612,8 @@ export function SettingsForm({
 
     try {
       const next = await put({
+        acknowledged: sensitive && acknowledged,
+        contactInbox: textChange(inbox, view.contactInbox.value),
         pesapal: {
           consumerKey: secretChange(consumerKey),
           consumerSecret: secretChange(consumerSecret),
@@ -358,6 +627,7 @@ export function SettingsForm({
         },
       });
       setView(next);
+      setInbox(next.contactInbox.value);
       setPesapalEnv(next.pesapal.env.value);
       setIpnId(next.pesapal.ipnId.value);
       setDraftModel(next.openrouter.draftModel.value);
@@ -365,6 +635,7 @@ export function SettingsForm({
       setConsumerKey(blankSecret);
       setConsumerSecret(blankSecret);
       setApiKey(blankSecret);
+      setAcknowledged(false);
       setMessage({ kind: "ok", text: "Saved. New requests use these settings straight away." });
     } catch (err) {
       setMessage({ kind: "error", text: err instanceof Error ? err.message : "Could not save." });
@@ -393,25 +664,72 @@ export function SettingsForm({
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={required}
-              aria-label="Require payment before an assessment"
+            <Switch
+              checked={required}
+              label="Require payment before an assessment"
               disabled={switching}
-              onClick={() => void toggle(!required)}
-              className={`relative h-7 w-12 rounded-full transition-colors disabled:opacity-60 ${
-                required ? "bg-forest-900" : "bg-forest-900/25"
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-5 w-5 rounded-full bg-bone-50 transition-all ${
-                  required ? "left-6" : "left-1"
-                }`}
-              />
-            </button>
+              onChange={(next) => void flip({ requirePayment: next }, setRequired, required, next)}
+            />
             <SourceTag source={view.requirePayment.source} />
           </div>
+        </div>
+      </Card>
+
+      <Card
+        title="Email"
+        note="One master switch for everything the site sends, and a switch for each kind of message. A message goes out only when both the master switch and its own switch are on."
+      >
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <p className="text-[0.9375rem] font-medium text-forest-900">Send email</p>
+            <p className="mt-1 text-[0.8125rem] text-forest-900/55">
+              {emailOn
+                ? "On. Each kind below is sent unless it is switched off."
+                : "Off. Nothing is sent, including contact form enquiries. People are shown their link to copy by hand, and each message is written to the server log."}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Switch
+              checked={emailOn}
+              label="Send email"
+              disabled={switching}
+              onChange={(next) => void flip({ emailEnabled: next }, setEmailOn, emailOn, next)}
+            />
+            <SourceTag source={view.emailEnabled.source} />
+          </div>
+        </div>
+
+        <div
+          className={`flex flex-col divide-y divide-forest-900/10 rounded-2xl border border-forest-900/10 transition-opacity ${
+            emailOn ? "" : "opacity-50"
+          }`}
+        >
+          {EMAIL_KINDS.map((k) => (
+            <div key={k.id} className="flex items-start justify-between gap-6 p-4">
+              <div>
+                <p className="text-[0.875rem] font-medium text-forest-900">{k.label}</p>
+                <p className="mt-0.5 text-[0.8125rem] text-forest-900/55">{k.description}</p>
+                {!emailOn && kinds[k.id] && (
+                  <p className="mt-1 text-[0.75rem] text-forest-900/50">
+                    Held back by the master switch.
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={kinds[k.id]}
+                label={k.label}
+                disabled={switching}
+                onChange={(next) =>
+                  void flip(
+                    { emailKinds: { [k.id]: next } },
+                    (v) => setKinds((cur) => ({ ...cur, [k.id]: v })),
+                    kinds[k.id],
+                    next,
+                  )
+                }
+              />
+            </div>
+          ))}
         </div>
       </Card>
 
@@ -425,6 +743,19 @@ export function SettingsForm({
       )}
 
       <form onSubmit={save} className="flex flex-col gap-6">
+        <Card
+          title="Contact form"
+          note="Enquiries from the website contact form are emailed to this address. Clear it to fall back to the server environment."
+        >
+          <TextField
+            label="Inbox address"
+            view={view.contactInbox}
+            value={inbox}
+            onValue={setInbox}
+            placeholder="info@example.com"
+          />
+        </Card>
+
         <Card
           title="Payments (Pesapal)"
           note="A value saved here wins over the server environment. Remove it to go back to the environment."
@@ -483,20 +814,24 @@ export function SettingsForm({
             onClear={(clear) => setApiKey({ value: "", clear })}
             disabled={locked}
           />
-          <ModelSelect
+          <ModelPicker
             label="Drafting model"
             view={view.openrouter.draftModel}
             value={draftModel}
             onValue={setDraftModel}
             models={models}
+            fx={fx}
+            role={DRAFT_ROLE}
             hint="Writes the report to the fixed structure. A low-cost model is enough."
           />
-          <ModelSelect
+          <ModelPicker
             label="Humaniser model"
             view={view.openrouter.humanizerModel}
             value={humanizerModel}
             onValue={setHumanizerModel}
             models={models}
+            fx={fx}
+            role={HUMANIZER_ROLE}
             hint="Edits the draft's prose. Prefer one that follows editing instructions closely."
           />
           <CostSummary
@@ -504,11 +839,34 @@ export function SettingsForm({
             humanizerId={humanizerModel}
             models={models}
             source={pricesFrom}
+            fx={fx}
           />
         </Card>
 
+        {sensitive && (
+          <div className="flex flex-col gap-3">
+            <RotationWarning goingLive={goingLive} />
+            <label className="flex items-start gap-3 text-[0.875rem] text-forest-900">
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              I understand this changes a live key or payment mode, and I have the new value
+              backed up.
+            </label>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-4">
-          <Button type="submit" variant="primary" size="lg" arrow disabled={saving}>
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            arrow
+            disabled={saving || (sensitive && !acknowledged)}
+          >
             {saving ? "Saving..." : "Save settings"}
           </Button>
           {message && (

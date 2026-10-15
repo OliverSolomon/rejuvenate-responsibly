@@ -25,6 +25,7 @@ export async function POST(request: Request) {
   const found = await getAssessment(normaliseCode(body.code));
   if (found) {
     await send({
+      kind: "assessment",
       to: found.profile.email,
       ...assessmentAccessEmail({
         organisation: found.profile.organisation,

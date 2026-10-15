@@ -64,7 +64,12 @@ export async function POST(
     );
   }
 
-  const delivery = await send({ to: assessment.profile.email, subject, text });
+  const delivery = await send({
+    kind: "notice",
+    to: assessment.profile.email,
+    subject,
+    text,
+  });
   if (!delivery.ok) {
     return NextResponse.json(
       {

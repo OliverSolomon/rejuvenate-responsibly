@@ -56,6 +56,7 @@ export async function POST(
   }
 
   const delivery = await send({
+    kind: "report",
     to: assessment.profile.email,
     ...reportReadyEmail({
       organisation: assessment.profile.organisation,

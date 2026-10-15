@@ -1,5 +1,6 @@
 import "server-only";
 
+import { EMAIL_KIND_IDS, type EmailKind } from "./email-kinds";
 import { changeSettings, readSettings, type StoredSettings } from "./store";
 import {
   decryptSecret,
@@ -57,6 +58,35 @@ export async function requirePayment(): Promise<{ value: boolean; source: Source
   return { value: true, source: "default" };
 }
 
+/** Dashboard switch, then RMI_EMAIL_ENABLED=false, then on. */
+export async function emailEnabled(): Promise<{ value: boolean; source: Source }> {
+  const stored = await readSettings();
+  if (typeof stored.emailEnabled === "boolean") {
+    return { value: stored.emailEnabled, source: "dashboard" };
+  }
+  if (process.env.RMI_EMAIL_ENABLED?.trim().toLowerCase() === "false") {
+    return { value: false, source: "env" };
+  }
+  return { value: true, source: "default" };
+}
+
+/** Whether one kind of email may go out: the master switch and that kind's switch. */
+export async function emailAllowed(kind: EmailKind): Promise<boolean> {
+  const stored = await readSettings();
+  if (typeof stored.emailEnabled === "boolean") {
+    if (!stored.emailEnabled) return false;
+  } else if (process.env.RMI_EMAIL_ENABLED?.trim().toLowerCase() === "false") {
+    return false;
+  }
+  return stored.emailKinds?.[kind] !== false;
+}
+
+/** Dashboard value, then RMI_CONTACT_INBOX, then the caller's fallback. */
+export async function contactInbox(fallback: string): Promise<string> {
+  const stored = await readSettings();
+  return text(stored.contactInbox, "RMI_CONTACT_INBOX", fallback).value!;
+}
+
 export type PesapalConfig = {
   consumerKey?: string;
   consumerSecret?: string;
@@ -111,6 +141,10 @@ export type SettingsView = {
   /** False when RMI_SETTINGS_KEY is missing: secrets cannot be saved here. */
   encryption: boolean;
   requirePayment: { value: boolean; source: Source };
+  emailEnabled: { value: boolean; source: Source };
+  /** Each kind's own switch, ignoring the master switch. */
+  emailKinds: Record<EmailKind, boolean>;
+  contactInbox: TextView;
   pesapal: {
     consumerKey: SecretView;
     consumerSecret: SecretView;
@@ -143,6 +177,11 @@ export async function settingsView(): Promise<SettingsView> {
   return {
     encryption: encryptionAvailable(),
     requirePayment: await requirePayment(),
+    emailEnabled: await emailEnabled(),
+    emailKinds: Object.fromEntries(
+      EMAIL_KIND_IDS.map((k) => [k, stored.emailKinds?.[k] !== false]),
+    ) as Record<EmailKind, boolean>,
+    contactInbox: textView(stored.contactInbox, "RMI_CONTACT_INBOX"),
     pesapal: {
       consumerKey: secretView(p.consumerKey, "PESAPAL_CONSUMER_KEY"),
       consumerSecret: secretView(p.consumerSecret, "PESAPAL_CONSUMER_SECRET"),
@@ -169,6 +208,9 @@ export async function settingsView(): Promise<SettingsView> {
  */
 export type SettingsUpdate = {
   requirePayment?: boolean;
+  emailEnabled?: boolean;
+  emailKinds?: Partial<Record<EmailKind, boolean>>;
+  contactInbox?: string | null;
   pesapal?: {
     consumerKey?: string | null;
     consumerSecret?: string | null;
@@ -215,6 +257,12 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
     };
 
     if (typeof update.requirePayment === "boolean") next.requirePayment = update.requirePayment;
+
+    if (typeof update.emailEnabled === "boolean") next.emailEnabled = update.emailEnabled;
+    if (update.emailKinds) {
+      next.emailKinds = { ...current.emailKinds, ...update.emailKinds };
+    }
+    applyText(next, "contactInbox", update.contactInbox);
 
     const p = next.pesapal!;
     applySecret(p, "consumerKey", update.pesapal?.consumerKey);

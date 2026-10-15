@@ -79,6 +79,7 @@ export async function POST(request: Request) {
 
   const resumeUrl = `${siteUrl()}/rmi/assessment?id=${created.id}&t=${created.token}`;
   const delivery = await send({
+    kind: "assessment",
     to: created.profile.email,
     ...assessmentAccessEmail({
       organisation: created.profile.organisation,

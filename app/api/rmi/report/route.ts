@@ -75,6 +75,7 @@ export async function POST(request: Request) {
     // Put the link in their inbox too, so the report is not trapped behind
     // whichever tab happened to be open when they pressed the button.
     await send({
+      kind: "report",
       to: assessment.profile.email,
       ...reportReadyEmail({
         organisation: assessment.profile.organisation,

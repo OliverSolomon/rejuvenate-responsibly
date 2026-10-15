@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     created.map(async (share) => {
       const link = `${siteUrl()}/rmi/survey?t=${share.token}`;
       const delivery = await send({
+        kind: "invite",
         to: share.email,
         ...shareInviteEmail({
           organisation: found?.profile.organisation ?? "an organisation you work with",
@@ -191,6 +192,7 @@ async function onStakeholderResponse(assessmentId: string): Promise<void> {
 
     const link = `${siteUrl()}/rmi/report?id=${assessment.id}&t=${assessment.token}`;
     await send({
+      kind: "report",
       to: assessment.profile.email,
       ...reportReadyEmail({
         organisation: assessment.profile.organisation,

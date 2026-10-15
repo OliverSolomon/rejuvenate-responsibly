@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { send } from "@/lib/rmi/mailer";
+import { contactInbox } from "@/lib/rmi/settings";
 import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
@@ -36,7 +37,8 @@ export async function POST(request: Request) {
   }
 
   await send({
-    to: process.env.RMI_CONTACT_INBOX ?? site.email,
+    kind: "enquiry",
+    to: await contactInbox(site.email),
     subject: `Website enquiry: ${body.topic || "General"} (${body.organisation || "no organisation"})`,
     text: [
       `Name: ${body.name}`,
