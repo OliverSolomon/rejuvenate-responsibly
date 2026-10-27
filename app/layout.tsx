@@ -7,6 +7,7 @@ import { SiteChrome } from "@/components/site/site-chrome";
 import { AdminBanner } from "@/components/site/admin-banner";
 import { site } from "@/lib/site";
 import { baseUrl } from "@/lib/seo";
+import { contactDetails } from "@/lib/rmi/settings";
 
 /* Self-hosted so the site has no runtime dependency on Google Fonts. */
 const body = localFont({
@@ -84,7 +85,19 @@ const organisationJsonLd = {
   sameAs: site.socials.map((s) => s.href),
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * Regenerated at most every five minutes.
+ *
+ * The footer and the header read the contact details from the dashboard, which
+ * means these pages cannot be frozen at build time or a change would never show
+ * up. Five minutes keeps them fast to serve while making a saved change appear
+ * without a deploy.
+ */
+export const revalidate = 300;
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const contact = await contactDetails();
+
   return (
     <html
       lang="en"
@@ -102,7 +115,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Skip to content
         </a>
         <SiteChrome>
-          <SiteHeader />
+          <SiteHeader whatsapp={contact.whatsapp} />
         </SiteChrome>
         <main id="main" className="flex-1">
           {children}

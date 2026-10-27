@@ -1,11 +1,18 @@
-import { pricing } from "@/lib/rmi/pricing";
+import { tiers } from "@/lib/rmi/settings";
 import { ButtonLink } from "@/components/ui/button";
 import { PayButton } from "./pay-button";
 
-export function PricingCards() {
+/**
+ * The tiers as the dashboard has them: the prices, the summaries and what each
+ * one includes, in the currency the organisation bills in. A tier an admin has
+ * hidden is simply not here.
+ */
+export async function PricingCards() {
+  const priced = await tiers();
+
   return (
     <div className="mt-14 grid gap-5 lg:grid-cols-3">
-      {pricing.map((tier) => {
+      {priced.map((tier) => {
         const featured = tier.featured;
         return (
           <div

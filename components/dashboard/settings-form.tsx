@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   callCostUsd,
-  formatKes,
+  formatLocal,
   REPORT_TOKENS,
   reportCost,
   type ModelPrice,
@@ -271,7 +271,7 @@ function ModelPicker({
             <span className="block truncate text-[0.75rem] text-forest-900/55">
               {provider ? providerLabel(provider) : ""}
               {currentCost !== null
-                ? ` · about ${formatKes(currentCost, fx.kesPerUsd)} per report`
+                ? ` · about ${formatLocal(currentCost, fx.perUsd, fx.currency)} per report`
                 : provider
                   ? " · price unknown, left out of the estimate"
                   : ""}
@@ -318,13 +318,13 @@ function ModelPicker({
                       {m.id === cheapest && <Badge tone="good">Cheapest</Badge>}
                     </span>
                     <span className="mt-0.5 block text-[0.75rem] text-forest-900/55">
-                      {providerLabel(s.provider)} · {formatKes(m.inPerM, fx.kesPerUsd)} in /{" "}
-                      {formatKes(m.outPerM, fx.kesPerUsd)} out per 1M tokens
+                      {providerLabel(s.provider)} · {formatLocal(m.inPerM, fx.perUsd, fx.currency)} in /{" "}
+                      {formatLocal(m.outPerM, fx.perUsd, fx.currency)} out per 1M tokens
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
                     <span className="block text-[0.875rem] font-medium text-forest-900">
-                      {formatKes(cost, fx.kesPerUsd)}
+                      {formatLocal(cost, fx.perUsd, fx.currency)}
                     </span>
                     <span className="block text-[0.6875rem] text-forest-900/50">per report</span>
                   </span>
@@ -388,7 +388,7 @@ function CostSummary({
 }) {
   const find = (id: string) => models.find((m) => m.id === id);
   const cost = reportCost(find(draftId), find(humanizerId));
-  const rate = fx.kesPerUsd;
+  const rate = fx.perUsd;
   const before = reportCost(find("anthropic/claude-sonnet-4.5"), undefined).draft;
 
   return (
@@ -399,13 +399,13 @@ function CostSummary({
       {cost.total !== null ? (
         <>
           <p className="mt-1 font-[family-name:var(--font-serif)] text-[1.875rem] leading-none text-forest-900">
-            {formatKes(cost.total, rate)}
+            {formatLocal(cost.total, rate, fx.currency)}
           </p>
           <p className="mt-2 text-[0.8125rem] text-forest-900/65">
-            Drafting {formatKes(cost.draft!, rate)} plus humaniser {formatKes(cost.humanizer!, rate)}.
-            About {formatKes(cost.total * 1000, rate)} for 1,000 reports.
+            Drafting {formatLocal(cost.draft!, rate, fx.currency)} plus humaniser {formatLocal(cost.humanizer!, rate, fx.currency)}.
+            About {formatLocal(cost.total * 1000, rate, fx.currency)} for 1,000 reports.
             {before !== null && cost.total < before
-              ? ` Before, drafting alone on Claude Sonnet 4.5 was about ${formatKes(before, rate)}.`
+              ? ` Before, drafting alone on Claude Sonnet 4.5 was about ${formatLocal(before, rate, fx.currency)}.`
               : ""}
           </p>
         </>
@@ -521,16 +521,25 @@ function RotationWarning({ goingLive }: { goingLive: boolean }) {
 type Secrets = { value: string; clear: boolean };
 const blankSecret: Secrets = { value: "", clear: false };
 
+export type SettingsSection = "all" | "pricing" | "reports" | "email";
+
 export function SettingsForm({
   initial,
   models,
   pricesFrom,
   fx,
+  section = "all",
 }: {
   initial: SettingsView;
   models: ModelPrice[];
   pricesFrom: "live" | "built-in";
   fx: FxRate;
+  /**
+   * Which cards to show. The form keeps every value in state whatever is on
+   * screen, and only sends what changed, so saving from one tab never writes a
+   * field belonging to another.
+   */
+  section?: SettingsSection;
 }) {
   const router = useRouter();
   const [view, setView] = useState(initial);
@@ -646,8 +655,17 @@ export function SettingsForm({
 
   const locked = !view.encryption;
 
+  /** Whether a card belongs on the tab being shown. */
+  const show = (name: Exclude<SettingsSection, "all">) =>
+    section === "all" || section === name;
+
+  // The save button and the key warning only make sense where there is a field
+  // to save. The switches above save themselves as they are flipped.
+  const showsSecrets = show("pricing") || show("reports") || show("email");
+
   return (
     <div className="flex flex-col gap-6">
+      {show("pricing") && (
       <Card
         title="Testing"
         note="Turn this off to let people start an assessment from the pricing page without paying. Those runs are recorded as waived, so they never count as revenue."
@@ -674,7 +692,9 @@ export function SettingsForm({
           </div>
         </div>
       </Card>
+      )}
 
+      {show("email") && (
       <Card
         title="Email"
         note="One master switch for everything the site sends, and a switch for each kind of message. A message goes out only when both the master switch and its own switch are on."
@@ -732,8 +752,9 @@ export function SettingsForm({
           ))}
         </div>
       </Card>
+      )}
 
-      {locked && (
+      {locked && showsSecrets && (
         <p className="rounded-2xl border border-clay-400/30 bg-clay-400/8 p-4 text-[0.875rem] leading-relaxed text-clay-500">
           Secrets cannot be saved from here yet: <code>RMI_SETTINGS_KEY</code> is not set on the
           server. Add it to the server environment (any long random string, for example from{" "}
@@ -743,6 +764,7 @@ export function SettingsForm({
       )}
 
       <form onSubmit={save} className="flex flex-col gap-6">
+        {show("email") && (
         <Card
           title="Contact form"
           note="Enquiries from the website contact form are emailed to this address. Clear it to fall back to the server environment."
@@ -755,7 +777,9 @@ export function SettingsForm({
             placeholder="info@example.com"
           />
         </Card>
+        )}
 
+        {show("pricing") && (
         <Card
           title="Payments (Pesapal)"
           note="A value saved here wins over the server environment. Remove it to go back to the environment."
@@ -800,7 +824,9 @@ export function SettingsForm({
             hint="Pins one IPN registration. Leave empty and the app registers its own."
           />
         </Card>
+        )}
 
+        {show("reports") && (
         <Card
           title="Report writing (OpenRouter)"
           note="Every report is drafted by the first model, then edited by the humaniser model. Both run through the same key."
@@ -842,6 +868,7 @@ export function SettingsForm({
             fx={fx}
           />
         </Card>
+        )}
 
         {sensitive && (
           <div className="flex flex-col gap-3">

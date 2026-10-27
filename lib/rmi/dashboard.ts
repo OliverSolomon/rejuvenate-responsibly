@@ -2,6 +2,7 @@ import "server-only";
 
 import { SECTION_ORDER, type SectionId } from "./questions";
 import { scoreAssessment } from "./scoring";
+import { samplesHidden } from "./settings";
 import {
   isUndelivered,
   listAllStakeholderResponses,
@@ -54,8 +55,21 @@ function reportState(a: Assessment): ReportState {
   return a.report.editedAt ? "issued" : "draft";
 }
 
+/**
+ * Every assessment the dashboard should show.
+ *
+ * One place, so hiding the samples takes them out of the list, the detail
+ * views, the analytics and the delivery alerts together rather than from
+ * whichever of them somebody remembered. Hiding never deletes: the rows are
+ * still there and the switch can go back.
+ */
+async function visibleAssessments(): Promise<Assessment[]> {
+  const [assessments, hidden] = await Promise.all([listAssessments(), samplesHidden()]);
+  return hidden ? assessments.filter((a) => !a.sample) : assessments;
+}
+
 export async function organisationRows(): Promise<OrganisationRow[]> {
-  const assessments = await listAssessments();
+  const assessments = await visibleAssessments();
   return assessments.map((a) => ({
     id: a.id,
     organisation: a.profile.organisation || "Unnamed organisation",
@@ -105,6 +119,8 @@ export type OrganisationDetail = {
 export async function organisationDetail(
   id: string,
 ): Promise<OrganisationDetail | null> {
+  // Not filtered: a hidden sample opened by its own link should still read, so
+  // the switch does not turn a working page into a dead one.
   const assessments = await listAssessments();
   const assessment = assessments.find((a) => a.id === id);
   if (!assessment) return null;
@@ -184,8 +200,12 @@ export type Analytics = {
 };
 
 export async function analytics(): Promise<Analytics> {
-  const assessments = await listAssessments();
+  const assessments = await visibleAssessments();
   const allResponses = await listAllStakeholderResponses();
+  const hidden = await samplesHidden();
+  const responses = hidden
+    ? allResponses.filter((r) => assessments.some((a) => a.id === r.assessmentId))
+    : allResponses;
 
   const submitted = assessments.filter((a) => a.status === "submitted");
 
@@ -224,7 +244,7 @@ export async function analytics(): Promise<Analytics> {
       submitted: submitted.length,
       reports: assessments.filter((a) => a.report).length,
       stakeholders: assessments.reduce((n, a) => n + a.shares.length, 0),
-      responded: allResponses.length,
+      responded: responses.length,
       paid: assessments.filter((a) => a.payment.status === "paid").length,
     },
     deliveryProblems: assessments

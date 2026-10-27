@@ -3,6 +3,14 @@ import "server-only";
 import { EMAIL_KIND_IDS, type EmailKind } from "./email-kinds";
 import { changeSettings, readSettings, type BrandAsset, type StoredSettings } from "./store";
 import {
+  DEFAULT_COUNTRY,
+  defaultCurrencyFor,
+  isCountryCode,
+  isCurrencyCode,
+} from "./regions";
+import { pricing, type Tier } from "./pricing";
+import { site } from "@/lib/site";
+import {
   decryptSecret,
   encryptionAvailable,
   encryptSecret,
@@ -329,4 +337,230 @@ export async function clearBrandAsset(
     };
   });
   return previous;
+}
+
+/* -------------------------------------------------------------------------- */
+/* where the organisation is, and what it bills in                            */
+/* -------------------------------------------------------------------------- */
+
+export type Place = { country: string; currency: string; currencySource: Source };
+
+/**
+ * The country and the currency.
+ *
+ * The currency follows the country unless somebody has chosen otherwise, which
+ * is why the source comes back too: the form can then say "following Kenya"
+ * rather than pretending a shilling was picked by hand.
+ */
+export async function place(): Promise<Place> {
+  const stored = await readSettings();
+  const country = isCountryCode(stored.organisation?.country)
+    ? stored.organisation!.country!
+    : DEFAULT_COUNTRY;
+
+  const chosen = stored.organisation?.currency;
+  if (isCurrencyCode(chosen)) {
+    return { country, currency: chosen!, currencySource: "dashboard" };
+  }
+  return { country, currency: defaultCurrencyFor(country), currencySource: "default" };
+}
+
+/* -------------------------------------------------------------------------- */
+/* what the public site says                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Settings for the public pages, which must never fail to render.
+ *
+ * These are read while generating the marketing pages, sometimes at build time
+ * on a machine with no database behind it. A storage problem there should leave
+ * the site reading from the values in the code, not stop it being built.
+ */
+async function safeSettings(): Promise<StoredSettings> {
+  try {
+    return await readSettings();
+  } catch (error) {
+    console.warn(
+      "[rmi:settings] could not read the saved settings, using the built-in values",
+      error instanceof Error ? error.message : error,
+    );
+    return {};
+  }
+}
+
+export type ContactDetails = {
+  email: string;
+  location: string;
+  phones: string[];
+  /** Always a full link by the time it leaves here, or empty. */
+  whatsapp: string;
+};
+
+/** A bare number is turned into a link; anything that looks like one is kept. */
+export function whatsappLink(value: string | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const digits = raw.replace(/[^0-9]/g, "");
+  return digits ? `https://wa.me/${digits}` : "";
+}
+
+/**
+ * The contact details the site shows. Anything unset falls back to the values
+ * in lib/site.ts, so the pages read properly on a fresh install.
+ */
+export async function contactDetails(): Promise<ContactDetails> {
+  const stored = (await safeSettings()).contact ?? {};
+  const phones = stored.phones?.map((p) => p.trim()).filter(Boolean);
+  return {
+    email: stored.email?.trim() || site.email,
+    location: stored.location?.trim() || site.location,
+    phones: phones?.length ? phones : [...site.phones],
+    whatsapp: whatsappLink(stored.whatsapp) || site.whatsapp,
+  };
+}
+
+export type SocialLink = { label: string; href: string };
+
+/**
+ * The social pages in the footer. An empty array saved from the dashboard means
+ * show none, which is different from never having saved, so the fallback only
+ * applies when the key is absent.
+ */
+export async function socialLinks(): Promise<SocialLink[]> {
+  const stored = (await safeSettings()).socials;
+  if (!stored) return site.socials.map((s) => ({ label: s.label, href: s.href }));
+  return stored
+    .filter((s) => s.label?.trim() && s.href?.trim())
+    .map((s) => ({ label: s.label.trim(), href: s.href.trim() }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* the pricing tiers                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The tiers as the site should show them: what the code defines, with whatever
+ * an admin has changed laid over the top, in the organisation's currency.
+ *
+ * `price` is what gets printed and `amount` is what gets charged, so they are
+ * worked out from the same number rather than kept in step by hand.
+ */
+export async function tiers(): Promise<Tier[]> {
+  const stored = await safeSettings();
+  const overrides = stored.tiers ?? {};
+  const { currency } = await place();
+
+  return pricing
+    .filter((tier) => !overrides[tier.id]?.hidden)
+    .map((tier): Tier => {
+      const over = overrides[tier.id] ?? {};
+      const amount = over.amount === undefined ? tier.amount : over.amount;
+      return {
+        ...tier,
+        name: over.name?.trim() || tier.name,
+        amount,
+        currency: amount === null ? "" : currency,
+        // Printed without the currency code, which sits beside it on the page.
+        price:
+          amount === null
+            ? tier.price
+            : amount.toLocaleString("en-GB", { maximumFractionDigits: 0 }),
+        summary: over.summary?.trim() || tier.summary,
+        includes: over.includes?.length ? over.includes : tier.includes,
+      };
+    });
+}
+
+/* -------------------------------------------------------------------------- */
+/* sample data                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Whether sample rows are being kept out of the views. */
+export async function samplesHidden(): Promise<boolean> {
+  return (await readSettings()).samples?.hidden === true;
+}
+
+/* -------------------------------------------------------------------------- */
+/* saving the above                                                           */
+/* -------------------------------------------------------------------------- */
+
+export type ProfileUpdate = {
+  country?: string | null;
+  currency?: string | null;
+  contact?: {
+    email?: string | null;
+    location?: string | null;
+    phones?: string[] | null;
+    whatsapp?: string | null;
+  };
+  socials?: { label: string; href: string }[] | null;
+  tiers?: StoredSettings["tiers"];
+  samplesHidden?: boolean;
+};
+
+/**
+ * Save the organisation, the public details, the tiers or the sample switch.
+ *
+ * Separate from saveSettings because none of this is a secret and none of it
+ * needs the encryption key, so it keeps working on a server that has none.
+ */
+export async function saveProfile(update: ProfileUpdate, by: string): Promise<void> {
+  await changeSettings((current): StoredSettings => {
+    const next: StoredSettings = { ...current };
+
+    if (update.country !== undefined || update.currency !== undefined) {
+      const organisation = { ...next.organisation };
+      if (update.country !== undefined) {
+        if (update.country && isCountryCode(update.country)) organisation.country = update.country;
+        else delete organisation.country;
+      }
+      if (update.currency !== undefined) {
+        // Clearing it hands the choice back to the country.
+        if (update.currency && isCurrencyCode(update.currency)) {
+          organisation.currency = update.currency;
+        } else {
+          delete organisation.currency;
+        }
+      }
+      next.organisation = organisation;
+    }
+
+    if (update.contact) {
+      const contact = { ...next.contact };
+      for (const key of ["email", "location", "whatsapp"] as const) {
+        const value = update.contact[key];
+        if (value === undefined) continue;
+        if (value === null || !value.trim()) delete contact[key];
+        else contact[key] = value.trim();
+      }
+      if (update.contact.phones !== undefined) {
+        const phones = update.contact.phones?.map((p) => p.trim()).filter(Boolean) ?? [];
+        if (phones.length) contact.phones = phones;
+        else delete contact.phones;
+      }
+      next.contact = contact;
+    }
+
+    if (update.socials !== undefined) {
+      if (update.socials === null) delete next.socials;
+      else {
+        next.socials = update.socials
+          .filter((s) => s.label?.trim() && s.href?.trim())
+          .map((s) => ({ label: s.label.trim().slice(0, 40), href: s.href.trim() }));
+      }
+    }
+
+    if (update.tiers) {
+      next.tiers = { ...next.tiers, ...update.tiers };
+    }
+
+    if (update.samplesHidden !== undefined) {
+      next.samples = { ...next.samples, hidden: update.samplesHidden };
+    }
+
+    next.updatedAt = new Date().toISOString();
+    next.updatedBy = by;
+    return next;
+  });
 }

@@ -1,8 +1,10 @@
+import { contactDetails } from "@/lib/rmi/settings";
 import { ButtonLink } from "@/components/ui/button";
 import { Container } from "@/components/ui/section";
-import { site } from "@/lib/site";
 
-export function Cta() {
+export async function Cta() {
+  const contact = await contactDetails();
+
   return (
     <section className="bg-bone-100 px-2 pb-2 sm:px-3 sm:pb-3">
       <Container size="wide" className="px-0 sm:px-0">
@@ -26,8 +28,8 @@ export function Cta() {
             </div>
             <p className="text-[0.875rem] text-forest-900/55">
               Or reach us directly at{" "}
-              <a href={`mailto:${site.email}`} className="underline underline-offset-4">
-                {site.email}
+              <a href={`mailto:${contact.email}`} className="underline underline-offset-4">
+                {contact.email}
               </a>
             </p>
           </div>

@@ -178,6 +178,46 @@ export type StoredSettings = {
   emailKinds?: Partial<Record<EmailKind, boolean>>;
   /** Where contact form enquiries are delivered. */
   contactInbox?: string;
+  /** Where the organisation is, and what it bills in. */
+  organisation?: {
+    /** ISO 3166-1 alpha-2, from the EAC and SADC list in regions.ts. */
+    country?: string;
+    /** ISO 4217. Defaults to the country's own currency. */
+    currency?: string;
+  };
+  /**
+   * What the public site shows as the way to get in touch. Anything left unset
+   * falls back to lib/site.ts, so the site reads properly before anyone saves.
+   */
+  contact?: {
+    email?: string;
+    location?: string;
+    phones?: string[];
+    /** A wa.me link, or a bare number which is turned into one. */
+    whatsapp?: string;
+  };
+  /** The social pages in the footer. An empty array means show none. */
+  socials?: { label: string; href: string }[];
+  /**
+   * What each pricing tier costs and offers. Keyed by the tier ids in
+   * pricing.ts; a tier absent here keeps what the code says.
+   */
+  tiers?: Record<
+    string,
+    {
+      name?: string;
+      /** null is a tier that is quoted rather than sold online. */
+      amount?: number | null;
+      summary?: string;
+      includes?: string[];
+      hidden?: boolean;
+    }
+  >;
+  /**
+   * Sample data loaded from the dashboard. Hiding takes it out of every view
+   * without deleting it, so the dashboard can be seen as it will really look.
+   */
+  samples?: { hidden?: boolean };
   /** The logo and stamp the report template draws on. */
   brand?: {
     logo?: BrandAsset;

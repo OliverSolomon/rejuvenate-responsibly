@@ -1,9 +1,17 @@
 import Link from "next/link";
+import { contactDetails, socialLinks } from "@/lib/rmi/settings";
 import { Logo } from "@/components/ui/logo";
 import { Container } from "@/components/ui/section";
 import { nav, services, site } from "@/lib/site";
 
-export function SiteFooter() {
+/**
+ * The footer reads the contact details and social pages from the dashboard, so
+ * they can be changed without a deploy. The values in lib/site.ts are the
+ * fallback, which is what a fresh install shows.
+ */
+export async function SiteFooter() {
+  const [contact, socials] = await Promise.all([contactDetails(), socialLinks()]);
+
   return (
     <footer className="dark-panel relative overflow-hidden bg-forest-950 text-bone-100">
       <Container size="wide" className="relative pb-10 pt-20 sm:pt-24">
@@ -15,7 +23,7 @@ export function SiteFooter() {
               strategy and sustainable practice.
             </p>
             <div className="flex flex-wrap gap-2">
-              {site.socials.map((s) => (
+              {socials.map((s) => (
                 <a
                   key={s.label}
                   href={s.href}
@@ -46,14 +54,16 @@ export function SiteFooter() {
           </FooterCol>
 
           <FooterCol title="Talk to us">
-            <FooterLink href={`mailto:${site.email}`}>{site.email}</FooterLink>
-            {site.phones.map((p) => (
+            <FooterLink href={`mailto:${contact.email}`}>{contact.email}</FooterLink>
+            {contact.phones.map((p) => (
               <FooterLink key={p} href={`tel:${p.replace(/\s/g, "")}`}>
                 {p}
               </FooterLink>
             ))}
-            <FooterLink href={site.whatsapp}>WhatsApp us</FooterLink>
-            <li className="pt-2 text-[0.9375rem] text-bone-100/45">{site.location}</li>
+            {contact.whatsapp && (
+              <FooterLink href={contact.whatsapp}>WhatsApp us</FooterLink>
+            )}
+            <li className="pt-2 text-[0.9375rem] text-bone-100/45">{contact.location}</li>
           </FooterCol>
         </div>
 

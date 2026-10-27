@@ -42,12 +42,21 @@ export function reportCost(draft?: ModelPrice, humanizer?: ModelPrice): ReportCo
   return { draft: d, humanizer: h, total: d !== null && h !== null ? d + h : null };
 }
 
-/** Shillings for an amount in dollars. Sub-shilling costs keep their decimals. */
-export function formatKes(usd: number, kesPerUsd: number): string {
-  const kes = usd * kesPerUsd;
-  if (kes < 0.01) return "under KES 0.01";
-  if (kes < 10) return `KES ${kes.toFixed(2)}`;
-  return `KES ${kes.toLocaleString("en-KE", { maximumFractionDigits: kes < 1000 ? 1 : 0 })}`;
+/**
+ * An amount in dollars, written in the currency the organisation bills in.
+ *
+ * Model prices are quoted per million tokens, so a single report often costs a
+ * fraction of one unit. Small amounts keep their decimals and large ones lose
+ * them, because "KES 0.42" and "KES 54,000" both want to be readable and
+ * neither wants the other's precision.
+ */
+export function formatLocal(usd: number, perUsd: number, currency: string): string {
+  const local = usd * perUsd;
+  if (local < 0.01) return `under ${currency} 0.01`;
+  if (local < 10) return `${currency} ${local.toFixed(2)}`;
+  return `${currency} ${local.toLocaleString("en-GB", {
+    maximumFractionDigits: local < 1000 ? 1 : 0,
+  })}`;
 }
 
 /** Cost of one call with this model, for a role that reads `inTokens` and writes `outTokens`. */

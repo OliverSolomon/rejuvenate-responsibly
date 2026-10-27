@@ -49,6 +49,19 @@ export function DashboardNav({ email, name }: { email: string; name: string | nu
           );
         })}
       </nav>
+      {/* The way back out. Easy to miss how often this is wanted: the dashboard
+          is a different world from the site and there was no door between them. */}
+      <Link
+        href="/"
+        className="hidden rounded-full border border-forest-900/15 px-3.5 py-2 text-[0.8125rem] text-forest-900/65 transition-colors hover:border-forest-900/40 hover:text-forest-900 sm:inline-flex sm:items-center sm:gap-1.5"
+      >
+        <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M2 7.2 8 2l6 5.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3.6 8.4V14h8.8V8.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        View the website
+      </Link>
+
       <span className="hidden text-[0.8125rem] text-forest-900/45 lg:block" title={email}>
         {name ?? email}
       </span>

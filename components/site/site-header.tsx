@@ -12,7 +12,7 @@ import { nav, site } from "@/lib/site";
  */
 const OVERLAY_ROUTES = ["/", "/rmi"];
 
-export function SiteHeader() {
+export function SiteHeader({ whatsapp }: { whatsapp?: string }) {
   const pathname = usePathname();
   const [pastHero, setPastHero] = useState(false);
 
@@ -113,7 +113,7 @@ export function SiteHeader() {
 
               <div className="flex shrink-0 items-center gap-3">
                 <a
-                  href={site.whatsapp}
+                  href={whatsapp || site.whatsapp}
                   target="_blank"
                   rel="noreferrer noopener"
                   aria-label="Message us on WhatsApp"

@@ -3,7 +3,7 @@ import { pageMeta } from "@/lib/seo";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Container, Section } from "@/components/ui/section";
 import { ContactForm } from "@/components/site/contact-form";
-import { site } from "@/lib/site";
+import { contactDetails } from "@/lib/rmi/settings";
 
 export const metadata: Metadata = pageMeta({
   title: "Contact us",
@@ -18,6 +18,8 @@ const intentMap: Record<string, string> = {
 };
 
 export default async function ContactPage({ searchParams }: PageProps<"/contact">) {
+  // Read from the dashboard, falling back to the values in the code.
+  const contact = await contactDetails();
   const params = await searchParams;
   const raw = params?.intent;
   const intent = typeof raw === "string" ? intentMap[raw] : undefined;
@@ -41,17 +43,17 @@ export default async function ContactPage({ searchParams }: PageProps<"/contact"
                 <dt className="eyebrow text-forest-900/40">Email</dt>
                 <dd className="mt-2">
                   <a
-                    href={`mailto:${site.email}`}
+                    href={`mailto:${contact.email}`}
                     className="text-[1.0625rem] underline-offset-4 hover:underline"
                   >
-                    {site.email}
+                    {contact.email}
                   </a>
                 </dd>
               </div>
               <div>
                 <dt className="eyebrow text-forest-900/40">Phone</dt>
                 <dd className="mt-2 flex flex-col gap-1">
-                  {site.phones.map((p) => (
+                  {contact.phones.map((p) => (
                     <a
                       key={p}
                       href={`tel:${p.replace(/\s/g, "")}`}
@@ -66,7 +68,7 @@ export default async function ContactPage({ searchParams }: PageProps<"/contact"
                 <dt className="eyebrow text-forest-900/40">WhatsApp</dt>
                 <dd className="mt-2">
                   <a
-                    href={site.whatsapp}
+                    href={contact.whatsapp}
                     target="_blank"
                     rel="noreferrer noopener"
                     className="text-[1.0625rem] underline-offset-4 hover:underline"
@@ -77,7 +79,7 @@ export default async function ContactPage({ searchParams }: PageProps<"/contact"
               </div>
               <div>
                 <dt className="eyebrow text-forest-900/40">Where we are</dt>
-                <dd className="mt-2 text-[1.0625rem]">{site.location}</dd>
+                <dd className="mt-2 text-[1.0625rem]">{contact.location}</dd>
               </div>
             </dl>
           </div>

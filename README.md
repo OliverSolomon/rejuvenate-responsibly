@@ -66,6 +66,8 @@ lib/
   rmi/report.ts                drafting prompt and the two-pass generation
   rmi/markdown.ts              renders the generated report
   rmi/dashboard.ts             read models behind the dashboard views
+  rmi/regions.ts               EAC and SADC countries, and their currencies
+  rmi/workbook.ts              everything entered, as a spreadsheet
   rmi/team.ts                  who can use the dashboard, and the rules for it
   rmi/team-invite.ts           turns an invitation into a link and emails it
   rmi/template.ts              the report template, placeholders and merging
@@ -224,6 +226,81 @@ inserted by the server, never by a browser.
 The dashboard still reads `lib/rmi/store.ts`, the JSON store the public site
 writes to, so it shows live work today. The migration is the shape to move to;
 when that happens, only the three functions in `lib/rmi/dashboard.ts` change.
+
+## Settings
+
+Settings are a row of tabs, one subject each, with the chosen tab in the
+address bar so a link to one works and a save comes back to where you were.
+Supabase and the keys are last on purpose: everything a client sees comes
+before the plumbing.
+
+| Tab | What it holds |
+| --- | --- |
+| Organisation | The country, and the currency everything is priced in |
+| Website | Contact details, WhatsApp, social pages |
+| Branding | The logo and the stamp, and the way through to the template |
+| Pricing | What each tier costs and offers, and the payment switch |
+| Report writing | The drafting and humaniser models, and what a report costs |
+| Report template | A link to the editor |
+| Email | The master switch, a switch per kind, the enquiry inbox |
+| Team | A link to the team page |
+| Sample data | Load, hide or remove the invented organisations |
+| Supabase and keys | Where the data lives, and the import tool |
+
+### Country and currency
+
+The country list is the East African Community and the Southern African
+Development Community. Four countries belong to both and appear once, under
+EAC, with the other membership noted rather than listed twice.
+
+The currency follows the country unless somebody chooses otherwise, and the
+form says which of the two is happening rather than letting a default look like
+a decision. Whatever the country, the dollar and the euro are always offered.
+Everything priced follows it: the tiers on the pricing page, what a client is
+charged, and the model prices in the report writing tab, which are quoted in
+dollars and converted at a rate fetched daily.
+
+### What the public site reads from here
+
+Contact details, WhatsApp, the social pages and the pricing tiers all come from
+the dashboard. Anything left unset falls back to `lib/site.ts`, so a fresh
+install reads properly and clearing a field is never the same as blanking the
+site.
+
+That means the marketing pages cannot be frozen at build time or a saved change
+would never appear, so the root layout carries `revalidate = 300` and the pages
+are regenerated at most every five minutes. Saving also clears the tree
+straight away, so a change you just made is on the site by the time you go and
+look at it.
+
+The tier price is the number a client is actually charged, not a second copy of
+a display string to keep in step with it. Leaving a price empty makes that tier
+one people have to ask about, which is how Enterprise works.
+
+### Sample data
+
+Three states, not two. The samples can be loaded, hidden or removed. Hiding
+keeps every row where it is and takes it out of the analytics, the responses
+list and the delivery alerts, which is how the dashboard can be seen as it will
+look with only real work in it without throwing away something useful for
+testing. One function decides what is visible, so hiding takes effect
+everywhere at once rather than wherever somebody remembered.
+
+An organisation opened by its own link still reads while hidden, so the switch
+never turns a working page into a dead one.
+
+## Exporting everything
+
+Responses has an export that hands back a spreadsheet: a sheet of organisations,
+one of every answer, one of the stakeholders invited, one of their answers, and
+one of the reports. Every question answered is its own row with the question
+text beside it, so the workbook can be filtered and pivoted rather than only
+kept as a backup.
+
+It is built with ExcelJS rather than the usual Python route, because it runs on
+the production server, which has Node and nothing else. It follows the sample
+switch, and the first sheet says which way that switch was set, since a
+spreadsheet outlives the memory of the setting it was made under.
 
 ## The team
 

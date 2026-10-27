@@ -29,11 +29,26 @@ export default async function ResponsesPage() {
 
   return (
     <div>
-      <h1 className="display text-[clamp(1.75rem,3.4vw,2.5rem)]">Responses</h1>
-      <p className="mt-3 max-w-[58ch] text-[0.9375rem] leading-relaxed text-forest-900/60">
-        One row per organisation. Open a row to see the stakeholders it invited, who
-        has answered, and the state of its report.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="display text-[clamp(1.75rem,3.4vw,2.5rem)]">Responses</h1>
+          <p className="mt-3 max-w-[58ch] text-[0.9375rem] leading-relaxed text-forest-900/60">
+            One row per organisation. Open a row to see the stakeholders it invited, who
+            has answered, and the state of its report.
+          </p>
+        </div>
+
+        {/* A plain link rather than a button: the browser downloads it, and a
+            link can be opened in a new tab or copied like anything else. */}
+        {sorted.length > 0 && (
+          <a
+            href="/api/dashboard/export"
+            className="shrink-0 rounded-full border border-forest-900/15 px-5 py-2.5 text-[0.8125rem] font-medium text-forest-900/75 transition hover:border-forest-900/40 hover:text-forest-900"
+          >
+            Export to a spreadsheet
+          </a>
+        )}
+      </div>
 
       {sorted.length === 0 ? (
         <Card className="mt-8 p-10 text-center">
