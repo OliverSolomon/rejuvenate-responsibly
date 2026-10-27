@@ -359,20 +359,27 @@ Two targets:
 
 What the workflow needs:
 
-| Where | Name | Why |
-| --- | --- | --- |
-| Secrets | `SSH_PRIVATE_KEY`, `SSH_HOST` | Reaching the server |
-| Variables | `NEXT_PUBLIC_SITE_URL` | Links in outbound email |
-| Variables | `NEXT_PUBLIC_SUPABASE_URL` | Admin sign-in, compiled in |
-| Variables | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Admin sign-in, compiled in |
+| Where | Name | Required | Why |
+| --- | --- | --- | --- |
+| Secrets | `SSH_PRIVATE_KEY`, `SSH_HOST` | Yes | Reaching the server |
+| Variables | `NEXT_PUBLIC_SITE_URL` | No | Links in outbound email |
+| Variables | `NEXT_PUBLIC_SUPABASE_URL` | No | Admin sign-in |
+| Variables | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Admin sign-in |
 
-Both live under Settings > Secrets and variables > Actions. A build with the
-variables missing still deploys and still serves the public site; it just
-cannot sign an admin in, and the workflow says so in its log rather than
-failing.
+Both live under Settings > Secrets and variables > Actions. Only the two SSH
+secrets are needed. The three variables are there for builds that want the
+values compiled in, and the server's own environment file covers the same
+ground at request time, so leaving them unset costs nothing.
 
 Everything read at runtime goes in `/etc/rejuvenateresponsibly.env` on the
-server, which the container is started with.
+server, which the container is started with. That includes the two Supabase
+settings the dashboard needs. Next normally compiles `NEXT_PUBLIC_` variables
+into the browser bundle while the site is being built, which is why a
+deployment can gate the dashboard correctly and still fail at sign-in with the
+Supabase client complaining that a URL and key are required: the server had
+them and the browser never did. `SupabaseRuntimeConfig` writes them into the
+sign-in and dashboard pages when those pages are served, so the environment
+file on the server is enough and the build does not have to know anything.
 
 Once `SUPABASE_SERVICE_ROLE_KEY` is in that file, submissions go to Supabase and
 `.data` is only a fallback (see Storage). Until then they are written to `.data`

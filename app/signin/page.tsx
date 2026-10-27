@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
-import { pageMeta } from "@/lib/seo";
 import { SignInForm } from "@/components/dashboard/sign-in-form";
 import { Container, Section } from "@/components/ui/section";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { SupabaseRuntimeConfig } from "@/utils/supabase/runtime-config";
 
-export const metadata: Metadata = pageMeta({
+export const metadata: Metadata = {
   title: "Sign in",
-  description:
-    "Sign in to the Rate My Impact admin dashboard.",
-  path: "/signin",
-  private: true,
-});
+  robots: { index: false, follow: false },
+};
 
 export default async function SignInPage({ searchParams }: PageProps<"/signin">) {
   const params = await searchParams;
@@ -30,6 +27,8 @@ export default async function SignInPage({ searchParams }: PageProps<"/signin">)
             the link we email them and never need an account.
           </p>
           <SignInForm reason={pick("error")} next={pick("next")} />
+          {/* The build may not have had the Supabase settings to compile in. */}
+          <SupabaseRuntimeConfig />
         </div>
       </Container>
     </Section>
