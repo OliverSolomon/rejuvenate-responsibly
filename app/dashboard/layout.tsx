@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { currentScope } from "@/lib/rmi/scope";
+import { getFeed } from "@/lib/rmi/activity";
 import { themeCss } from "@/lib/rmi/settings";
 import { companyById } from "@/lib/rmi/store";
 import { DashboardNav } from "@/components/dashboard/nav";
+import { Notifications } from "@/components/dashboard/notifications";
+import { SetupBanner } from "@/components/dashboard/setup-banner";
 import { LogoMark } from "@/components/ui/logo";
 import { SupabaseRuntimeConfig } from "@/utils/supabase/runtime-config";
 
@@ -16,9 +19,11 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
 
   // A company that has accepted its own colours gets them on every page, and
   // the theme is scoped to this element so the public site is untouched.
-  const [css, viewing] = await Promise.all([
+  const [css, viewing, feed] = await Promise.all([
     themeCss().catch(() => null),
     scope.isSuper && scope.companyId ? companyById(scope.companyId) : Promise.resolve(undefined),
+    // A problem reading the feed must never keep anyone out of the dashboard.
+    getFeed().catch(() => null),
   ]);
 
   return (
@@ -41,10 +46,17 @@ export default async function DashboardLayout({ children }: LayoutProps<"/dashbo
                 Working in {viewing.name}
               </span>
             )}
+            {feed && (
+              <Notifications
+                attention={feed.attention}
+                fresh={[...feed.sinceSignIn, ...feed.catchUp]}
+              />
+            )}
             <DashboardNav email={user.email} name={user.name} />
           </div>
         </div>
       </header>
+      {feed && <SetupBanner items={feed.attention} />}
       <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8">{children}</main>
       {/* Signing out needs the browser client, same as signing in. */}
       <SupabaseRuntimeConfig />

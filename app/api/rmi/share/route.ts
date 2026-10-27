@@ -180,7 +180,7 @@ async function onStakeholderResponse(assessmentId: string): Promise<void> {
       });
       return;
     }
-    if (!(await reportConfigured())) {
+    if (!(await reportConfigured(assessment.companyId))) {
       console.warn("[rmi:share] all stakeholders in but no OpenRouter API key is set", {
         assessmentId,
       });

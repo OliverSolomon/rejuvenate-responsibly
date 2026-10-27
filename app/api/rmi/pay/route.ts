@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!(await pesapalConfigured())) {
+  if (!(await pesapalConfigured(assessment.companyId))) {
     return NextResponse.json(
       {
         error:
@@ -67,6 +67,7 @@ export async function POST(request: Request) {
 
   try {
     const order = await submitOrder({
+      companyId: assessment.companyId,
       merchantReference,
       amount: tier.amount,
       currency: tier.currency || "KES",

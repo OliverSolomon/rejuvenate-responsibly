@@ -185,6 +185,10 @@ export function daysUntilExpiry(report: Report | null | undefined, now = new Dat
   return Math.ceil((expires.getTime() - now.getTime()) / 86_400_000);
 }
 
+/** The things a company can borrow from the installation instead of setting up itself. */
+export const SHARED_KINDS = ["openrouter", "pesapal", "template"] as const;
+export type SharedKind = (typeof SHARED_KINDS)[number];
+
 /**
  * Settings an admin can change from the dashboard. Secrets are stored
  * encrypted (see secrets.ts) and never leave the server. Anything left unset
@@ -259,7 +263,16 @@ export type StoredSettings = {
     apiKey?: string;
     draftModel?: string;
     humanizerModel?: string;
+    /** When OpenRouter last refused a request because the credit had run out. Cleared by a success or a new key. */
+    creditsOutAt?: string;
   };
+  /**
+   * Which of the installation's shared resources this company uses instead of
+   * its own. Set by a super admin on the company's row. A key that is absent is
+   * on, so a new company starts out sharing everything; false means the company
+   * has to bring its own.
+   */
+  sharing?: Partial<Record<SharedKind, boolean>>;
   updatedAt?: string;
   updatedBy?: string;
 };

@@ -44,6 +44,8 @@ export type DashboardUser = {
   role: TeamRole;
   /** Which company they work for. */
   companyId: string;
+  /** When this sign-in began, which is what "since you signed in" is measured from. */
+  signedInAt: string | null;
 };
 
 /**
@@ -78,6 +80,7 @@ export async function getDashboardUser(): Promise<DashboardUser | null> {
       // Anything unrecognised falls to the least privileged of the three.
       role: data.role === "super" ? "super" : data.role === "owner" ? "owner" : "admin",
       companyId: data.company_id || "default",
+      signedInAt: user.last_sign_in_at ?? null,
     };
   } catch {
     return null;

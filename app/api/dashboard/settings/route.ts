@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import {
+  SharedKeysError,
   saveSettings,
   settingsView,
   type SettingsUpdate,
 } from "@/lib/rmi/settings";
+import { canConfigureInstallation, currentScope, DEFAULT_COMPANY, settingsCompany } from "@/lib/rmi/scope";
 import { isEmailKind, type EmailKind } from "@/lib/rmi/email-kinds";
 import { SecretsUnavailableError } from "@/lib/rmi/secrets";
-import { getDashboardUser } from "@/utils/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,10 +126,11 @@ function parse(body: unknown): { update: SettingsUpdate } | { error: string } {
  * reachable on its own, so this checks the admin list again.
  */
 export async function PUT(request: Request) {
-  const user = await getDashboardUser();
-  if (!user) {
+  const scope = await currentScope();
+  if (!scope) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });
   }
+  const user = scope.user;
 
   let body: unknown;
   try {
@@ -158,9 +160,26 @@ export async function PUT(request: Request) {
     );
   }
 
+  // The default company's keys are the ones every other company may borrow, so
+  // only a super admin changes them. Any other company's keys are its own to
+  // set, and saveSettings refuses if it is still on the shared ones.
+  if (
+    (pesapal || openrouter) &&
+    settingsCompany(scope) === DEFAULT_COMPANY &&
+    !canConfigureInstallation(scope)
+  ) {
+    return NextResponse.json(
+      { error: "Only the super admin can change the keys the installation shares." },
+      { status: 403 },
+    );
+  }
+
   try {
     await saveSettings(parsed.update, user.email);
   } catch (err) {
+    if (err instanceof SharedKeysError) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
     if (err instanceof SecretsUnavailableError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }

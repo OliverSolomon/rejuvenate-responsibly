@@ -15,9 +15,13 @@ async function handle(orderTrackingId: string | null, merchantReference: string 
   }
 
   try {
-    const status = await transactionStatus(orderTrackingId);
+    // Pesapal names the order in the callback, and the order says whose
+    // account the money went through, so look that up before asking for status.
+    const early = merchantReference ? await findByMerchantReference(merchantReference) : undefined;
+    const status = await transactionStatus(orderTrackingId, early?.companyId || "default");
     const reference = merchantReference ?? status.merchantReference;
-    const assessment = reference ? await findByMerchantReference(reference) : undefined;
+    const assessment =
+      early ?? (reference ? await findByMerchantReference(reference) : undefined);
 
     if (assessment) {
       await setPayment(assessment.id, {

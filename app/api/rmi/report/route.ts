@@ -45,16 +45,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await reportConfigured())) {
-    return NextResponse.json(
-      {
-        error:
-          "Report generation is not switched on yet. Add the OpenRouter API key in the dashboard settings.",
-      },
-      { status: 503 },
-    );
-  }
-
   let body: { id?: string; token?: string; force?: boolean };
   try {
     body = await request.json();
@@ -77,6 +67,15 @@ export async function POST(request: Request) {
   }
   if (assessment.report && !body.force) {
     return NextResponse.json(assessment.report);
+  }
+  if (!(await reportConfigured(assessment.companyId))) {
+    return NextResponse.json(
+      {
+        error:
+          "Report generation is not switched on yet. The firm running this assessment has been asked to set it up.",
+      },
+      { status: 503 },
+    );
   }
 
   try {

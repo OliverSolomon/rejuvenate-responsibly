@@ -1,6 +1,7 @@
 import "server-only";
 
-import { listAssessments, listCompanies, type Company } from "./store";
+import { resourceStates, sharingFor } from "./settings";
+import { listAssessments, listCompanies, type Company, type SharedKind } from "./store";
 import { listTeam, teamConfigured } from "./team";
 
 /**
@@ -16,6 +17,10 @@ export type CompanyRow = Company & {
   members: number;
   assessments: number;
   submitted: number;
+  /** True for each thing the company borrows from the installation. */
+  sharing: Record<SharedKind, boolean>;
+  /** True for each thing the company can actually use right now. */
+  ready: Record<SharedKind, boolean>;
 };
 
 /** A slug from a name: lowercase, words joined by hyphens. */
@@ -43,13 +48,24 @@ export async function companyRows(): Promise<CompanyRow[]> {
       : Promise.resolve([]),
   ]);
 
-  return companies.map((company) => {
-    const theirs = assessments.filter((a) => (a.companyId || "default") === company.id);
-    return {
-      ...company,
-      members: team.filter((m) => m.companyId === company.id).length,
-      assessments: theirs.length,
-      submitted: theirs.filter((a) => a.status === "submitted").length,
-    };
-  });
+  return Promise.all(
+    companies.map(async (company): Promise<CompanyRow> => {
+      const theirs = assessments.filter((a) => (a.companyId || "default") === company.id);
+      const [sharing, states] = await Promise.all([
+        sharingFor(company.id),
+        resourceStates(company.id),
+      ]);
+      return {
+        ...company,
+        members: team.filter((m) => m.companyId === company.id).length,
+        assessments: theirs.length,
+        submitted: theirs.filter((a) => a.status === "submitted").length,
+        sharing,
+        ready: Object.fromEntries(states.map((s) => [s.kind, s.ready])) as Record<
+          SharedKind,
+          boolean
+        >,
+      };
+    }),
+  );
 }

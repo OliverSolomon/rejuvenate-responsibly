@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { OpenRouterError } from "@/lib/rmi/openrouter";
 import { generateReport } from "@/lib/rmi/report";
 import { reportConfigured } from "@/lib/rmi/settings";
 import {
@@ -41,7 +42,7 @@ export async function POST(
   if (assessment.report) {
     return NextResponse.json({ error: "This assessment already has a report." }, { status: 409 });
   }
-  if (!(await reportConfigured())) {
+  if (!(await reportConfigured(assessment.companyId))) {
     return NextResponse.json(
       { error: "Report writing is not configured. Add the OpenRouter key in Settings." },
       { status: 503 },
@@ -55,6 +56,15 @@ export async function POST(
     return NextResponse.json({ generated: true }, { status: 201 });
   } catch (err) {
     console.error("[rmi:report] admin generation failed", err);
+    if (err instanceof OpenRouterError && err.creditsOut) {
+      return NextResponse.json(
+        {
+          error:
+            "The OpenRouter credit has run out, so the report could not be written. Add credit, or ask the administrator to if your firm is on the shared key.",
+        },
+        { status: 402 },
+      );
+    }
     return NextResponse.json(
       { error: "The report could not be written. Try again in a moment." },
       { status: 502 },

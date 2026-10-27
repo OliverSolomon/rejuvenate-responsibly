@@ -440,3 +440,57 @@ export async function removeMember(id: string, actorId: string, view: TeamView):
   const { error } = await admin().from("rmi_admins").delete().eq("id", id);
   if (error) throw new TeamError(`They could not be removed: ${error.message}`, 502);
 }
+
+/* -------------------------------------------------------------------------- */
+/* when they were last here                                                   */
+/* -------------------------------------------------------------------------- */
+
+export type Visit = {
+  /** Where the visit before this sign-in ended, or null on a first ever visit. */
+  catchupSince: string | null;
+};
+
+/**
+ * Note that this person has the dashboard open, and work out what they missed.
+ *
+ * A sign-in that began after the last time they were seen marks the start of a
+ * new stretch: what happened since their previous visit ended is what they have
+ * to catch up on, and that moment is kept until the next sign-in so the card
+ * does not empty itself the moment they look at it. Otherwise the stored value
+ * stands. Writes are limited to once a minute, because every dashboard page
+ * calls this.
+ *
+ * Never throws: this is bookkeeping, and a project that has not run the latest
+ * migration, or has no service role key, should simply not have a catch-up.
+ */
+export async function recordVisit(userId: string, signedInAt: string | null): Promise<Visit> {
+  if (!teamConfigured()) return { catchupSince: null };
+  try {
+    const { data, error } = await admin()
+      .from("rmi_admins")
+      .select("last_seen_at, catchup_since")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error || !data) return { catchupSince: null };
+
+    const seen = (data.last_seen_at as string | null) ?? null;
+    const stored = (data.catchup_since as string | null) ?? null;
+    let catchup = stored;
+    const now = Date.now();
+
+    if (!seen) catchup = null;
+    else if (signedInAt && Date.parse(signedInAt) > Date.parse(seen)) catchup = seen;
+
+    if (seen && catchup === stored && now - Date.parse(seen) < 60_000) {
+      return { catchupSince: catchup };
+    }
+
+    await admin()
+      .from("rmi_admins")
+      .update({ last_seen_at: new Date(now).toISOString(), catchup_since: catchup })
+      .eq("id", userId);
+    return { catchupSince: catchup };
+  } catch {
+    return { catchupSince: null };
+  }
+}

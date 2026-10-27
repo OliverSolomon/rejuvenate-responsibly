@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { slugValid, slugify } from "@/lib/rmi/companies";
 import { canConfigureInstallation, currentScope } from "@/lib/rmi/scope";
-import { companyById, companyBySlug, updateCompany } from "@/lib/rmi/store";
+import { saveSharing } from "@/lib/rmi/settings";
+import { SHARED_KINDS, companyById, companyBySlug, updateCompany, type SharedKind } from "@/lib/rmi/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,12 +80,38 @@ export async function PATCH(
     patch.active = body.active;
   }
 
-  if (Object.keys(patch).length === 0) {
+  // Whether the company borrows the installation's keys and template, or has to
+  // bring its own. The default company is the installation, so it has nothing
+  // to borrow from.
+  let sharing: Partial<Record<SharedKind, boolean>> | undefined;
+  if (body.sharing !== undefined) {
+    if (company.isDefault) {
+      return NextResponse.json(
+        { error: "This is the firm that owns the installation, so there is nothing for it to share from." },
+        { status: 409 },
+      );
+    }
+    const raw = body.sharing;
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      return NextResponse.json({ error: "sharing has to be an object." }, { status: 400 });
+    }
+    sharing = {};
+    for (const [kind, value] of Object.entries(raw)) {
+      if (!(SHARED_KINDS as readonly string[]).includes(kind) || typeof value !== "boolean") {
+        return NextResponse.json({ error: `${kind} is not something that can be shared.` }, { status: 400 });
+      }
+      sharing[kind as SharedKind] = value;
+    }
+  }
+
+  if (Object.keys(patch).length === 0 && !sharing) {
     return NextResponse.json({ error: "There was nothing to change." }, { status: 400 });
   }
 
   try {
-    const updated = await updateCompany(id, patch);
+    if (sharing) await saveSharing(id, sharing, scope.user.email);
+    const updated =
+      Object.keys(patch).length === 0 ? company : await updateCompany(id, patch);
     if (!updated) {
       return NextResponse.json({ error: "That change could not be saved." }, { status: 409 });
     }

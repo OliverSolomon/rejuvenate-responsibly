@@ -21,7 +21,11 @@ import { getDashboardUser, type DashboardUser, type TeamRole } from "@/utils/sup
  *                 mail provider, Supabase itself
  *
  * The installation settings live on the default company's row and only a super
- * admin can change them, because they are one set of keys shared by everyone.
+ * admin can change them. By default every other company borrows them, along with
+ * the report template, so a new firm works from its first day. A super admin can
+ * switch that off per company and per thing (see `sharing` in StoredSettings),
+ * and from then on that company's own admins keep their own key, account or
+ * template, and are told on their dashboard until they have.
  */
 
 export const DEFAULT_COMPANY = "default";

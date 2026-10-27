@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
+import { getFeed } from "@/lib/rmi/activity";
 import { analytics } from "@/lib/rmi/dashboard";
+import { ActivityCard } from "@/components/dashboard/activity-card";
 import { Stat } from "@/components/dashboard/stat";
 import { SampleBadge } from "@/components/dashboard/status";
 import {
@@ -22,7 +24,7 @@ export const metadata: Metadata = pageMeta({
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
-  const a = await analytics();
+  const [a, feed] = await Promise.all([analytics(), getFeed().catch(() => null)]);
   const responseRate =
     a.totals.stakeholders > 0
       ? Math.round((a.totals.responded / a.totals.stakeholders) * 100)
@@ -47,6 +49,12 @@ export default async function AnalyticsPage() {
         <Stat label="Responses" value={a.totals.responded} hint={`${responseRate}% answered`} />
         <Stat label="Reports" value={a.totals.reports} />
       </div>
+
+      {feed && (
+        <div className="mt-8">
+          <ActivityCard feed={feed} />
+        </div>
+      )}
 
       {a.deliveryProblems.length > 0 && (
         <div className="mt-8 rounded-2xl border border-clay-400/30 bg-clay-400/8 p-5">

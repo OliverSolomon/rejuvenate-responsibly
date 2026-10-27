@@ -1,8 +1,8 @@
 import { humanize } from "./humanizer";
-import { chat, type ChatMessage } from "./openrouter";
+import { chat, OpenRouterError, type ChatMessage } from "./openrouter";
 import { SECTIONS, questionsFor } from "./questions";
 import { perceptionGap, scoreAssessment, type Answers } from "./scoring";
-import { openRouterConfig } from "./settings";
+import { openRouterConfig, recordCredits } from "./settings";
 import type { Assessment, StakeholderResponse } from "./store";
 
 /**
@@ -203,22 +203,35 @@ export async function generateReport(
   assessment: Assessment,
   stakeholders: StakeholderResponse[],
 ): Promise<GeneratedReport> {
-  const config = await openRouterConfig();
+  // The key is the company's own or the installation's, depending on how the
+  // super admin has set the company up, so ask for it by company.
+  const config = await openRouterConfig(assessment.companyId);
   if (!config.apiKey) throw new Error("No OpenRouter API key is configured.");
 
-  const draft = scrub(
-    await chat({
-      apiKey: config.apiKey,
-      model: config.draftModel,
-      messages: buildMessages(assessment, stakeholders),
-      temperature: 0.4,
-    }),
-  );
+  let edited: string;
+  try {
+    const draft = scrub(
+      await chat({
+        apiKey: config.apiKey,
+        model: config.draftModel,
+        messages: buildMessages(assessment, stakeholders),
+        temperature: 0.4,
+      }),
+    );
 
-  const edited = await humanize(draft, {
-    apiKey: config.apiKey,
-    model: config.humanizerModel,
-  });
+    edited = await humanize(draft, {
+      apiKey: config.apiKey,
+      model: config.humanizerModel,
+    });
+  } catch (error) {
+    // Out of credit is something the dashboard should say out loud, so it is
+    // written down on whichever row owns the key before the error goes on.
+    if (error instanceof OpenRouterError && error.creditsOut) {
+      await recordCredits(assessment.companyId, true);
+    }
+    throw error;
+  }
+  await recordCredits(assessment.companyId, false);
 
   return {
     markdown: scrub(edited),

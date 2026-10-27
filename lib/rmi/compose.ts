@@ -2,7 +2,8 @@ import "server-only";
 
 import { contentTypeFor, getFile } from "./files";
 import { renderMarkdown } from "./markdown";
-import { brandAssets } from "./settings";
+import { brandAssets, isShared, templateCompany } from "./settings";
+import { DEFAULT_COMPANY } from "./scope";
 import { readTemplate, reportExpired, reportExpiry, type Assessment } from "./store";
 import {
   DEFAULT_TEMPLATE_HTML,
@@ -66,7 +67,19 @@ export async function composeReport(
   const report = assessment.report;
   if (!report) return null;
 
-  const [template, brand] = await Promise.all([readTemplate(), brandAssets()]);
+  // A company on the shared template gets the installation's letterhead, with
+  // its own logo and stamp where it has uploaded them and the installation's
+  // where it has not. A company on its own template has nothing to borrow.
+  const company = assessment.companyId || DEFAULT_COMPANY;
+  const [template, own, house, borrowing] = await Promise.all([
+    templateCompany(company).then((owner) => readTemplate(owner)),
+    brandAssets(company),
+    brandAssets(DEFAULT_COMPANY),
+    isShared(company, "template"),
+  ]);
+  const brand = borrowing
+    ? { logo: own.logo ?? house.logo, stamp: own.stamp ?? house.stamp }
+    : own;
   const templateHtml = template.published?.html ?? DEFAULT_TEMPLATE_HTML;
   const templateVersion = template.published ? template.version : 0;
 

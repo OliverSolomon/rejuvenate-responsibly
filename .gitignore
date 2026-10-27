@@ -66,3 +66,6 @@ rr-*.tar.gz
 /docs/*
 # the site fonts, copied out of app/fonts at build time for report documents
 /public/fonts/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

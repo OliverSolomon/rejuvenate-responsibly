@@ -4,7 +4,8 @@ import { TemplateEditor, type TemplateState } from "@/components/dashboard/templ
 import { assetHref } from "@/lib/rmi/files";
 import { renderMarkdown } from "@/lib/rmi/markdown";
 import { pageMeta } from "@/lib/seo";
-import { brandAssets } from "@/lib/rmi/settings";
+import { brandAssets, isShared } from "@/lib/rmi/settings";
+import { currentScope, settingsCompany } from "@/lib/rmi/scope";
 import { readTemplate } from "@/lib/rmi/store";
 import {
   EDITOR_STARTER_HTML,
@@ -66,9 +67,39 @@ export default async function ReportTemplatePage() {
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
+  const scope = await currentScope();
+  const company = scope ? settingsCompany(scope) : "default";
+
+  // A company on the shared template has nothing to edit. Say whose it is
+  // rather than showing an editor whose saves would be refused.
+  if (await isShared(company, "template")) {
+    return (
+      <div>
+        <Link
+          href="/dashboard/settings"
+          className="text-[0.8125rem] text-forest-900/55 underline-offset-4 hover:underline"
+        >
+          Back to settings
+        </Link>
+        <h1 className="display mt-4 text-[clamp(1.75rem,3.4vw,2.5rem)]">Report template</h1>
+        <div className="mt-8 max-w-[60ch] rounded-card border border-forest-900/10 bg-bone-50 p-6 sm:p-8">
+          <p className="text-[0.9375rem] font-medium text-forest-900">
+            Your reports use the shared template
+          </p>
+          <p className="mt-2 text-[0.875rem] leading-relaxed text-forest-900/60">
+            The letterhead and footer come from the platform administrator, so every report carries
+            the same layout. Your own logo and stamp, if you have uploaded them in Branding, still
+            go on it. If you need a template of your own, ask the administrator to switch sharing
+            off for your company.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [template, brand, user] = await Promise.all([
-    readTemplate(),
-    brandAssets(),
+    readTemplate(company),
+    brandAssets(company),
     getDashboardUser(),
   ]);
 

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const live = await transactionStatus(orderTrackingId);
+    const live = await transactionStatus(orderTrackingId, assessment.companyId);
     const next = live.status === "paid" ? "paid" : live.status === "failed" ? "failed" : "pending";
     await setPayment(assessment.id, { status: next, method: live.paymentMethod, orderTrackingId });
     return NextResponse.json({ status: next, method: live.paymentMethod });

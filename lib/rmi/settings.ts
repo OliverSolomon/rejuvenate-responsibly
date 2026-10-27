@@ -1,7 +1,14 @@
 import "server-only";
 
 import { EMAIL_KIND_IDS, type EmailKind } from "./email-kinds";
-import { changeSettings, readSettings, type BrandAsset, type StoredSettings } from "./store";
+import {
+  changeSettings,
+  readSettings,
+  readTemplate,
+  type BrandAsset,
+  type SharedKind,
+  type StoredSettings,
+} from "./store";
 import {
   DEFAULT_COUNTRY,
   defaultCurrencyFor,
@@ -58,6 +65,55 @@ async function installationSettings(): Promise<StoredSettings> {
   return safeSettings(DEFAULT_COMPANY);
 }
 
+/** The company a request is about when the caller does not say. */
+async function activeCompany(): Promise<string> {
+  const scope = await currentScope();
+  return scope ? settingsCompany(scope) : DEFAULT_COMPANY;
+}
+
+/**
+ * Whose keys or template a company actually uses.
+ *
+ * A company other than the default one borrows the installation's unless a
+ * super admin has switched that off for it, in which case it has to bring its
+ * own. The default company is the installation, so it always uses its own row.
+ * Sharing is on unless it was explicitly turned off, so a new company works
+ * from the first day without anybody having to remember to enable it.
+ */
+export type Holder = {
+  /** The row the values are read from. */
+  settings: StoredSettings;
+  /** The company whose row that is. */
+  owner: string;
+  /** True when the company is using the installation's, not its own. */
+  shared: boolean;
+};
+
+async function holder(companyId: string, kind: SharedKind): Promise<Holder> {
+  if (companyId === DEFAULT_COMPANY) {
+    return { settings: await installationSettings(), owner: DEFAULT_COMPANY, shared: false };
+  }
+  const own = await safeSettings(companyId);
+  if (own.sharing?.[kind] !== false) {
+    return { settings: await installationSettings(), owner: DEFAULT_COMPANY, shared: true };
+  }
+  return { settings: own, owner: companyId, shared: false };
+}
+
+/** Whether a company is on the installation's keys or template for one thing. */
+export async function isShared(companyId: string, kind: SharedKind): Promise<boolean> {
+  if (companyId === DEFAULT_COMPANY) return false;
+  return (await safeSettings(companyId)).sharing?.[kind] !== false;
+}
+
+/**
+ * Which company's template a report is built from. The installation's own when
+ * the company shares it, otherwise the company's.
+ */
+export async function templateCompany(companyId: string): Promise<string> {
+  return (await isShared(companyId, "template")) ? DEFAULT_COMPANY : companyId;
+}
+
 /**
  * The company a save belongs to.
  *
@@ -70,26 +126,42 @@ async function writeCompany(): Promise<string> {
   return scope ? settingsCompany(scope) : DEFAULT_COMPANY;
 }
 
-function secret(stored: string | undefined, envName: string): { value?: string; source: Source; unreadable: boolean } {
+/**
+ * `useEnv` is false for a company on its own keys: the environment holds the
+ * installation's keys, and a company that was told to bring its own must not
+ * quietly spend them.
+ */
+function secret(
+  stored: string | undefined,
+  envName: string,
+  useEnv = true,
+): { value?: string; source: Source; unreadable: boolean } {
+  const fromEnv = useEnv ? process.env[envName]?.trim() : undefined;
   if (stored) {
     const plain = decryptSecret(stored);
     if (plain) return { value: plain, source: "dashboard", unreadable: false };
     // Saved, but the key changed or went missing. Fall back rather than break.
-    const fromEnv = process.env[envName]?.trim();
     return fromEnv
       ? { value: fromEnv, source: "env", unreadable: true }
       : { source: "none", unreadable: true };
   }
-  const fromEnv = process.env[envName]?.trim();
   return fromEnv ? { value: fromEnv, source: "env", unreadable: false } : { source: "none", unreadable: false };
 }
 
-function text(stored: string | undefined, envName: string, fallback?: string): { value?: string; source: Source } {
+function text(
+  stored: string | undefined,
+  envName: string,
+  fallback?: string,
+  useEnv = true,
+): { value?: string; source: Source } {
   if (stored?.trim()) return { value: stored.trim(), source: "dashboard" };
-  const fromEnv = process.env[envName]?.trim();
+  const fromEnv = useEnv ? process.env[envName]?.trim() : undefined;
   if (fromEnv) return { value: fromEnv, source: "env" };
   return fallback ? { value: fallback, source: "default" } : { source: "none" };
 }
+
+/** Whether the environment's keys may be used for this holder. */
+const envAllowed = (h: Holder) => h.owner === DEFAULT_COMPANY;
 
 export async function requirePayment(): Promise<{ value: boolean; source: Source }> {
   const stored = await scopedSettings();
@@ -138,14 +210,21 @@ export type PesapalConfig = {
   ipnId?: string;
 };
 
-export async function pesapalConfig(): Promise<PesapalConfig> {
-  const s = (await installationSettings()).pesapal ?? {};
-  const env = text(s.env, "PESAPAL_ENV");
+/**
+ * The Pesapal credentials a company's payments go through. With no company
+ * given, the one in the current request, which is what the dashboard wants; the
+ * public routes pass the company the assessment came in through.
+ */
+export async function pesapalConfig(companyId?: string): Promise<PesapalConfig> {
+  const h = await holder(companyId ?? (await activeCompany()), "pesapal");
+  const useEnv = envAllowed(h);
+  const s = h.settings.pesapal ?? {};
+  const env = text(s.env, "PESAPAL_ENV", undefined, useEnv);
   return {
-    consumerKey: secret(s.consumerKey, "PESAPAL_CONSUMER_KEY").value,
-    consumerSecret: secret(s.consumerSecret, "PESAPAL_CONSUMER_SECRET").value,
+    consumerKey: secret(s.consumerKey, "PESAPAL_CONSUMER_KEY", useEnv).value,
+    consumerSecret: secret(s.consumerSecret, "PESAPAL_CONSUMER_SECRET", useEnv).value,
     env: env.value === "live" ? "live" : "sandbox",
-    ipnId: text(s.ipnId, "PESAPAL_IPN_ID").value,
+    ipnId: text(s.ipnId, "PESAPAL_IPN_ID", undefined, useEnv).value,
   };
 }
 
@@ -155,23 +234,109 @@ export type OpenRouterConfig = {
   humanizerModel: string;
 };
 
-export async function openRouterConfig(): Promise<OpenRouterConfig> {
-  const s = (await installationSettings()).openrouter ?? {};
+export async function openRouterConfig(companyId?: string): Promise<OpenRouterConfig> {
+  const h = await holder(companyId ?? (await activeCompany()), "openrouter");
+  const useEnv = envAllowed(h);
+  const s = h.settings.openrouter ?? {};
   return {
-    apiKey: secret(s.apiKey, "OPENROUTER_API_KEY").value,
-    draftModel: text(s.draftModel, "OPENROUTER_MODEL", DEFAULT_DRAFT_MODEL).value!,
-    humanizerModel: text(s.humanizerModel, "OPENROUTER_HUMANIZER_MODEL", DEFAULT_HUMANIZER_MODEL)
-      .value!,
+    apiKey: secret(s.apiKey, "OPENROUTER_API_KEY", useEnv).value,
+    draftModel: text(s.draftModel, "OPENROUTER_MODEL", DEFAULT_DRAFT_MODEL, useEnv).value!,
+    humanizerModel: text(
+      s.humanizerModel,
+      "OPENROUTER_HUMANIZER_MODEL",
+      DEFAULT_HUMANIZER_MODEL,
+      useEnv,
+    ).value!,
   };
 }
 
-export async function pesapalConfigured(): Promise<boolean> {
-  const c = await pesapalConfig();
+export async function pesapalConfigured(companyId?: string): Promise<boolean> {
+  const c = await pesapalConfig(companyId);
   return Boolean(c.consumerKey && c.consumerSecret);
 }
 
-export async function reportConfigured(): Promise<boolean> {
-  return Boolean((await openRouterConfig()).apiKey);
+export async function reportConfigured(companyId?: string): Promise<boolean> {
+  return Boolean((await openRouterConfig(companyId)).apiKey);
+}
+
+/**
+ * Note that OpenRouter said the credit has run out, or that it works again.
+ *
+ * Recorded on the row that owns the key, so a company on the shared key and the
+ * installation both see the same state, and a company on its own key sees its
+ * own. Only writes when the state actually changes, so a healthy installation
+ * does not touch the database on every report.
+ */
+export async function recordCredits(companyId: string, out: boolean): Promise<void> {
+  try {
+    const h = await holder(companyId, "openrouter");
+    const flagged = Boolean(h.settings.openrouter?.creditsOutAt);
+    if (flagged === out) return;
+    await changeSettings((current): StoredSettings => {
+      const openrouter = { ...current.openrouter };
+      if (out) openrouter.creditsOutAt = new Date().toISOString();
+      else delete openrouter.creditsOutAt;
+      return { ...current, openrouter };
+    }, h.owner);
+  } catch (error) {
+    // Bookkeeping must never be the reason a report fails.
+    console.warn("[rmi:settings] could not record the credit state", error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* what is set up, and by whom                                                */
+/* -------------------------------------------------------------------------- */
+
+export type ResourceState = {
+  kind: SharedKind;
+  /** True when the company is borrowing the installation's. */
+  shared: boolean;
+  /** Whether the thing can be used at all. */
+  ready: boolean;
+  /** OpenRouter has refused for lack of credit. Only meaningful for openrouter. */
+  creditsOut: boolean;
+};
+
+/**
+ * The state of the three shared resources for one company, which is what both
+ * the dashboard banner and the settings page need to say what is missing.
+ */
+export async function resourceStates(companyId: string): Promise<ResourceState[]> {
+  const [ai, tplOwner] = await Promise.all([
+    holder(companyId, "openrouter"),
+    templateCompany(companyId),
+  ]);
+
+  const [aiCfg, payCfg, payShared, template] = await Promise.all([
+    openRouterConfig(companyId),
+    pesapalConfig(companyId),
+    isShared(companyId, "pesapal"),
+    readTemplate(tplOwner).catch(() => ({ version: 0 }) as Awaited<ReturnType<typeof readTemplate>>),
+  ]);
+
+  return [
+    {
+      kind: "openrouter",
+      shared: ai.shared,
+      ready: Boolean(aiCfg.apiKey),
+      creditsOut: Boolean(ai.settings.openrouter?.creditsOutAt) && Boolean(aiCfg.apiKey),
+    },
+    {
+      kind: "pesapal",
+      shared: payShared,
+      ready: Boolean(payCfg.consumerKey && payCfg.consumerSecret),
+      creditsOut: false,
+    },
+    {
+      kind: "template",
+      shared: tplOwner === DEFAULT_COMPANY && companyId !== DEFAULT_COMPANY,
+      // Reports still build without a published template, from the built-in
+      // one, but a company that was told to make its own has not done so yet.
+      ready: Boolean(template.published),
+      creditsOut: false,
+    },
+  ];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -196,12 +361,19 @@ export type SettingsView = {
     ipnId: TextView;
   };
   openrouter: { apiKey: SecretView; draftModel: TextView; humanizerModel: TextView };
+  /**
+   * True where the company is on the installation's key, so there is nothing
+   * for it to fill in and the values above are blanked rather than shown.
+   */
+  managed: { openrouter: boolean; pesapal: boolean };
+  /** OpenRouter has refused for lack of credit. */
+  creditsOut: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 };
 
-function secretView(stored: string | undefined, envName: string): SecretView {
-  const s = secret(stored, envName);
+function secretView(stored: string | undefined, envName: string, useEnv = true): SecretView {
+  const s = secret(stored, envName, useEnv);
   return {
     source: s.source,
     last4: s.value ? s.value.slice(-4) : null,
@@ -209,16 +381,31 @@ function secretView(stored: string | undefined, envName: string): SecretView {
   };
 }
 
-function textView(stored: string | undefined, envName: string, fallback = ""): TextView {
-  const t = text(stored, envName, fallback || undefined);
+function textView(
+  stored: string | undefined,
+  envName: string,
+  fallback = "",
+  useEnv = true,
+): TextView {
+  const t = text(stored, envName, fallback || undefined, useEnv);
   return { value: t.value ?? "", source: t.source };
 }
 
 export async function settingsView(): Promise<SettingsView> {
-  // The switches belong to the company; the keys belong to the installation.
-  const [stored, shared] = await Promise.all([scopedSettings(), installationSettings()]);
-  const p = shared.pesapal ?? {};
-  const o = shared.openrouter ?? {};
+  // The switches belong to the company. The keys belong to whoever holds them:
+  // the company itself, or the installation when the company shares its keys.
+  const company = await activeCompany();
+  const [stored, ai, pay] = await Promise.all([
+    scopedSettings(),
+    holder(company, "openrouter"),
+    holder(company, "pesapal"),
+  ]);
+  const aiEnv = envAllowed(ai);
+  const payEnv = envAllowed(pay);
+  const blankSecret: SecretView = { source: "none", last4: null, unreadable: false };
+  const blankText: TextView = { value: "", source: "none" };
+  const p = pay.settings.pesapal ?? {};
+  const o = ai.settings.openrouter ?? {};
   return {
     encryption: encryptionAvailable(),
     requirePayment: await requirePayment(),
@@ -227,19 +414,30 @@ export async function settingsView(): Promise<SettingsView> {
       EMAIL_KIND_IDS.map((k) => [k, stored.emailKinds?.[k] !== false]),
     ) as Record<EmailKind, boolean>,
     contactInbox: textView(stored.contactInbox, "RMI_CONTACT_INBOX"),
-    pesapal: {
-      consumerKey: secretView(p.consumerKey, "PESAPAL_CONSUMER_KEY"),
-      consumerSecret: secretView(p.consumerSecret, "PESAPAL_CONSUMER_SECRET"),
-      env: textView(p.env, "PESAPAL_ENV", "sandbox"),
-      ipnId: textView(p.ipnId, "PESAPAL_IPN_ID"),
-    },
-    openrouter: {
-      apiKey: secretView(o.apiKey, "OPENROUTER_API_KEY"),
-      draftModel: textView(o.draftModel, "OPENROUTER_MODEL", DEFAULT_DRAFT_MODEL),
-      humanizerModel: textView(o.humanizerModel, "OPENROUTER_HUMANIZER_MODEL", DEFAULT_HUMANIZER_MODEL),
-    },
-    updatedAt: stored.updatedAt ?? shared.updatedAt ?? null,
-    updatedBy: stored.updatedBy ?? shared.updatedBy ?? null,
+    pesapal: pay.shared
+      ? { consumerKey: blankSecret, consumerSecret: blankSecret, env: blankText, ipnId: blankText }
+      : {
+          consumerKey: secretView(p.consumerKey, "PESAPAL_CONSUMER_KEY", payEnv),
+          consumerSecret: secretView(p.consumerSecret, "PESAPAL_CONSUMER_SECRET", payEnv),
+          env: textView(p.env, "PESAPAL_ENV", "sandbox", payEnv),
+          ipnId: textView(p.ipnId, "PESAPAL_IPN_ID", "", payEnv),
+        },
+    openrouter: ai.shared
+      ? { apiKey: blankSecret, draftModel: blankText, humanizerModel: blankText }
+      : {
+          apiKey: secretView(o.apiKey, "OPENROUTER_API_KEY", aiEnv),
+          draftModel: textView(o.draftModel, "OPENROUTER_MODEL", DEFAULT_DRAFT_MODEL, aiEnv),
+          humanizerModel: textView(
+            o.humanizerModel,
+            "OPENROUTER_HUMANIZER_MODEL",
+            DEFAULT_HUMANIZER_MODEL,
+            aiEnv,
+          ),
+        },
+    managed: { openrouter: ai.shared, pesapal: pay.shared },
+    creditsOut: Boolean(o.creditsOutAt),
+    updatedAt: stored.updatedAt ?? null,
+    updatedBy: stored.updatedBy ?? null,
   };
 }
 
@@ -283,6 +481,15 @@ function applySecret<T extends object>(target: T, key: keyof T, value: string | 
   else (target[key] as unknown) = encryptSecret(value!.trim());
 }
 
+/** A company tried to save keys of its own while it is on the installation's. */
+export class SharedKeysError extends Error {
+  constructor() {
+    super(
+      "This company is using the shared keys, which the administrator manages. Ask them to switch sharing off before adding your own.",
+    );
+  }
+}
+
 /** Throws SecretsUnavailableError before changing anything if a secret cannot be encrypted. */
 export async function saveSettings(update: SettingsUpdate, by: string): Promise<void> {
   const settingASecret = [
@@ -300,10 +507,20 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
     typeof update.emailEnabled === "boolean" ||
     update.emailKinds !== undefined ||
     update.contactInbox !== undefined;
-  const touchesInstallation = update.pesapal !== undefined || update.openrouter !== undefined;
+  const touchesKeys = update.pesapal !== undefined || update.openrouter !== undefined;
 
-  // Two rows, because the two halves answer to different people: the switches
-  // are the company's to set, the keys are one set the installation shares.
+  // The keys go on the row of the company being worked in, which is the
+  // installation's row for the default company. A company that is borrowing
+  // the installation's keys has nothing of its own to save.
+  if (touchesKeys) {
+    if (update.pesapal !== undefined && (await isShared(company, "pesapal"))) {
+      throw new SharedKeysError();
+    }
+    if (update.openrouter !== undefined && (await isShared(company, "openrouter"))) {
+      throw new SharedKeysError();
+    }
+  }
+
   if (touchesCompany) {
     await changeSettings((current): StoredSettings => {
       const next: StoredSettings = { ...current };
@@ -321,7 +538,7 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
     }, company);
   }
 
-  if (touchesInstallation) {
+  if (touchesKeys) {
     await changeSettings((current): StoredSettings => {
       const next: StoredSettings = {
         ...current,
@@ -337,14 +554,51 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
 
       const o = next.openrouter!;
       applySecret(o, "apiKey", update.openrouter?.apiKey);
+      // A new or removed key starts with a clean slate about its credit.
+      if (update.openrouter?.apiKey !== undefined) delete o.creditsOutAt;
       applyText(o, "draftModel", update.openrouter?.draftModel);
       applyText(o, "humanizerModel", update.openrouter?.humanizerModel);
 
       next.updatedAt = new Date().toISOString();
       next.updatedBy = by;
       return next;
-    }, DEFAULT_COMPANY);
+    }, company);
   }
+}
+
+/**
+ * Switch a company between the installation's keys and template and its own.
+ *
+ * Written to the company's row, but only ever called for a super admin: whether
+ * a firm borrows or brings its own is the installation owner's decision.
+ */
+export async function saveSharing(
+  companyId: string,
+  patch: Partial<Record<SharedKind, boolean>>,
+  by: string,
+): Promise<void> {
+  await changeSettings((current): StoredSettings => {
+    const sharing = { ...current.sharing };
+    for (const [kind, value] of Object.entries(patch) as [SharedKind, boolean][]) {
+      // On is the default, so turning it back on removes the entry.
+      if (value) delete sharing[kind];
+      else sharing[kind] = false;
+    }
+    const next: StoredSettings = { ...current, updatedAt: new Date().toISOString(), updatedBy: by };
+    if (Object.keys(sharing).length) next.sharing = sharing;
+    else delete next.sharing;
+    return next;
+  }, companyId);
+}
+
+/** What a company's sharing looks like, every kind spelled out. */
+export async function sharingFor(companyId: string): Promise<Record<SharedKind, boolean>> {
+  const stored = await safeSettings(companyId);
+  return {
+    openrouter: stored.sharing?.openrouter !== false,
+    pesapal: stored.sharing?.pesapal !== false,
+    template: stored.sharing?.template !== false,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -353,12 +607,12 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
 
 export type BrandKind = "logo" | "stamp";
 
-export async function brandAssets(): Promise<{
+export async function brandAssets(companyId?: string): Promise<{
   logo?: BrandAsset;
   stamp?: BrandAsset;
   palette?: PaletteSeeds;
 }> {
-  const stored = await scopedSettings();
+  const stored = companyId ? await safeSettings(companyId) : await scopedSettings();
   return {
     logo: stored.brand?.logo,
     stamp: stored.brand?.stamp,

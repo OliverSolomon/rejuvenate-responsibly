@@ -123,6 +123,12 @@ create table if not exists public.rmi_admins (
   -- hand, and for anyone added before roles existed.
   invited_by  text,
   invited_at  timestamptz,
+  -- When they last had the dashboard open, and where their last visit ended
+  -- when this sign-in began. The second is what "to catch up on" is measured
+  -- from. Both are bookkeeping, written by the application and read by no one
+  -- else.
+  last_seen_at   timestamptz,
+  catchup_since  timestamptz,
   created_at  timestamptz not null default now()
 );
 
@@ -355,7 +361,9 @@ comment on table public.rmi_report_templates is
 alter table public.rmi_admins
   add column if not exists company_id text not null default 'default',
   add column if not exists invited_by text,
-  add column if not exists invited_at timestamptz;
+  add column if not exists invited_at timestamptz,
+  add column if not exists last_seen_at timestamptz,
+  add column if not exists catchup_since timestamptz;
 
 alter table public.rmi_assessments
   add column if not exists company_id text not null default 'default';

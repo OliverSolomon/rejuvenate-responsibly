@@ -63,8 +63,12 @@ async function token(config: PesapalConfig): Promise<string> {
   return data.token;
 }
 
-async function call<T>(pathname: string, init: RequestInit): Promise<T> {
-  const config = await pesapalConfig();
+/**
+ * Every call takes the company it is for, because each company may have its
+ * own Pesapal account and the money has to reach the right one.
+ */
+async function call<T>(companyId: string, pathname: string, init: RequestInit): Promise<T> {
+  const config = await pesapalConfig(companyId);
   const res = await fetch(`${baseUrl(config)}${pathname}`, {
     ...init,
     headers: {
@@ -99,15 +103,15 @@ type IpnResponse = { ipn_id: string; url: string };
 
 let cachedIpnId: { for: string; id: string } | null = null;
 
-export async function ipnId(notificationUrl: string): Promise<string> {
-  const config = await pesapalConfig();
+export async function ipnId(companyId: string, notificationUrl: string): Promise<string> {
+  const config = await pesapalConfig(companyId);
   if (config.ipnId) return config.ipnId;
 
   const scope = `${config.env}:${config.consumerKey}:${notificationUrl}`;
   if (cachedIpnId && cachedIpnId.for === scope) return cachedIpnId.id;
 
   // Reuse a registration for this exact URL rather than piling up new ones.
-  const existing = await call<IpnResponse[]>("/api/URLSetup/GetIpnList", { method: "GET" }).catch(
+  const existing = await call<IpnResponse[]>(companyId, "/api/URLSetup/GetIpnList", { method: "GET" }).catch(
     () => [] as IpnResponse[],
   );
   const match = Array.isArray(existing)
@@ -118,7 +122,7 @@ export async function ipnId(notificationUrl: string): Promise<string> {
     return match.ipn_id;
   }
 
-  const registered = await call<IpnResponse>("/api/URLSetup/RegisterIPN", {
+  const registered = await call<IpnResponse>(companyId, "/api/URLSetup/RegisterIPN", {
     method: "POST",
     body: JSON.stringify({ url: notificationUrl, ipn_notification_type: "POST" }),
   });
@@ -127,6 +131,8 @@ export async function ipnId(notificationUrl: string): Promise<string> {
 }
 
 export type SubmitOrder = {
+  /** Whose Pesapal account the order goes through. */
+  companyId: string;
   merchantReference: string;
   amount: number;
   currency: string;
@@ -140,6 +146,7 @@ export type SubmittedOrder = { orderTrackingId: string; redirectUrl: string };
 
 export async function submitOrder(order: SubmitOrder): Promise<SubmittedOrder> {
   const data = await call<{ order_tracking_id: string; redirect_url: string }>(
+    order.companyId,
     "/api/Transactions/SubmitOrderRequest",
     {
       method: "POST",
@@ -149,7 +156,7 @@ export async function submitOrder(order: SubmitOrder): Promise<SubmittedOrder> {
         amount: order.amount,
         description: order.description.slice(0, 100),
         callback_url: order.callbackUrl,
-        notification_id: await ipnId(order.notificationUrl),
+        notification_id: await ipnId(order.companyId, order.notificationUrl),
         billing_address: {
           email_address: order.billing.email,
           phone_number: order.billing.phone ?? "",
@@ -173,7 +180,10 @@ export type TransactionStatus = {
   merchantReference: string | null;
 };
 
-export async function transactionStatus(orderTrackingId: string): Promise<TransactionStatus> {
+export async function transactionStatus(
+  orderTrackingId: string,
+  companyId: string,
+): Promise<TransactionStatus> {
   const data = await call<{
     payment_method?: string;
     amount?: number;
@@ -182,6 +192,7 @@ export async function transactionStatus(orderTrackingId: string): Promise<Transa
     payment_status_description?: string;
     merchant_reference?: string;
   }>(
+    companyId,
     `/api/Transactions/GetTransactionStatus?orderTrackingId=${encodeURIComponent(orderTrackingId)}`,
     { method: "GET" },
   );

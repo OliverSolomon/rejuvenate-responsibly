@@ -4,7 +4,54 @@ const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 export type ChatMessage = { role: "system" | "user"; content: string };
 
-export class OpenRouterError extends Error {}
+export class OpenRouterError extends Error {
+  constructor(
+    message: string,
+    /** The HTTP status OpenRouter answered with, when it got that far. */
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+
+  /** 402 is how OpenRouter says the account has no credit left. */
+  get creditsOut(): boolean {
+    return this.status === 402;
+  }
+}
+
+/**
+ * Whether a key still has credit, asked of OpenRouter directly.
+ *
+ * `null` means it could not be worked out, which is not the same as out: a key
+ * with no limit set reports none, and a network failure reports nothing at
+ * all. Callers treat only an explicit `true` as a problem. Cached briefly so a
+ * dashboard that is opened often does not ask on every page.
+ */
+const creditCache = new Map<string, { at: number; out: boolean | null }>();
+
+export async function creditsOut(apiKey: string): Promise<boolean | null> {
+  const hit = creditCache.get(apiKey);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.out;
+
+  let out: boolean | null = null;
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/key", {
+      headers: { authorization: `Bearer ${apiKey}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 402) out = true;
+    else if (res.ok) {
+      const data = (await res.json()) as { data?: { limit_remaining?: number | null } };
+      const left = data.data?.limit_remaining;
+      out = typeof left === "number" ? left <= 0 : null;
+    }
+  } catch {
+    out = null;
+  }
+  creditCache.set(apiKey, { at: Date.now(), out });
+  return out;
+}
 
 /**
  * One chat completion, returned as plain text. Thinking is switched off where
@@ -38,6 +85,7 @@ export async function chat(opts: {
   if (!res.ok) {
     throw new OpenRouterError(
       `OpenRouter returned ${res.status} for ${opts.model}: ${(await res.text()).slice(0, 300)}`,
+      res.status,
     );
   }
 

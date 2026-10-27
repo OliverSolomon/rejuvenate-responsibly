@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { CompanyRow } from "@/lib/rmi/companies";
 
+const SHARE_LABELS = [
+  { kind: "openrouter", label: "AI report writing" },
+  { kind: "pesapal", label: "Payments" },
+  { kind: "template", label: "Report template" },
+] as const;
+
 /**
  * The firms using this installation, and which one you are working in.
  *
@@ -180,13 +186,14 @@ export function CompaniesPanel({
         {error && <p className="mt-4 text-[0.875rem] text-clay-500">{error}</p>}
 
         <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[44rem] text-left text-[0.8125rem]">
+          <table className="w-full min-w-[56rem] text-left text-[0.8125rem]">
             <thead>
               <tr className="border-b border-forest-900/10 text-forest-900/50">
                 <th className="py-2 pr-4 font-medium">Company</th>
                 <th className="py-2 pr-4 font-medium">Link</th>
                 <th className="py-2 pr-4 font-medium">People</th>
                 <th className="py-2 pr-4 font-medium">Assessments</th>
+                <th className="py-2 pr-4 font-medium">Uses the platform&apos;s</th>
                 <th className="py-2 font-medium">Actions</th>
               </tr>
             </thead>
@@ -235,6 +242,37 @@ export function CompaniesPanel({
                       <span className="text-forest-900/45"> ({company.submitted} submitted)</span>
                     )}
                   </td>
+                  <td className="py-3 pr-4">
+                    {company.isDefault ? (
+                      <span className="text-forest-900/45">It is the platform</span>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {SHARE_LABELS.map(({ kind, label }) => {
+                          const on = company.sharing[kind];
+                          return (
+                            <label
+                              key={kind}
+                              className="flex items-center gap-2 text-[0.8125rem] text-forest-900/80"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                disabled={busy !== null}
+                                onChange={() =>
+                                  patch(company.id, { sharing: { [kind]: !on } })
+                                }
+                                className="h-4 w-4"
+                              />
+                              {label}
+                              {!on && !company.ready[kind] && (
+                                <span className="text-clay-500">not set up</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-3">
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -267,6 +305,13 @@ export function CompaniesPanel({
         </div>
 
         <p className="mt-6 max-w-[62ch] text-[0.8125rem] leading-relaxed text-forest-900/50">
+          Ticked means the company runs on your OpenRouter key, your Pesapal account or your report
+          template, and has nothing to set up. Untick one and that company must add its own; its
+          admins see a banner on their dashboard until they do, and it falls to them to keep the
+          OpenRouter credit topped up.
+        </p>
+
+        <p className="mt-3 max-w-[62ch] text-[0.8125rem] leading-relaxed text-forest-900/50">
           To give somebody a company, step into it above and add them on the Team page. They will
           see only that company, and an owner there can manage their own people from then on.
         </p>

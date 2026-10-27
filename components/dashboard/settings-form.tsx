@@ -779,7 +779,20 @@ export function SettingsForm({
         </Card>
         )}
 
-        {show("pricing") && (
+        {show("pricing") && view.managed.pesapal && (
+          <Card
+            title="Payments (Pesapal)"
+            note="Card payments go through the platform's Pesapal account."
+          >
+            <p className="text-[0.875rem] leading-relaxed text-forest-900/65">
+              Nothing to set up here. The administrator manages the payment keys and the money is
+              handled on your behalf. If you would rather take payments into your own Pesapal
+              account, ask them to switch this off for your company.
+            </p>
+          </Card>
+        )}
+
+        {show("pricing") && !view.managed.pesapal && (
         <Card
           title="Payments (Pesapal)"
           note="A value saved here wins over the server environment. Remove it to go back to the environment."
@@ -826,11 +839,37 @@ export function SettingsForm({
         </Card>
         )}
 
-        {show("reports") && (
+        {show("reports") && view.managed.openrouter && (
+          <Card
+            title="Report writing (OpenRouter)"
+            note="Reports are drafted on the platform's OpenRouter key."
+          >
+            <p className="text-[0.875rem] leading-relaxed text-forest-900/65">
+              Nothing to set up here. The administrator manages the key, the models and the credit.
+              If report writing stops, they are told, and you will see a notice on your dashboard.
+              To use your own OpenRouter account, ask them to switch this off for your company.
+            </p>
+            {view.creditsOut && (
+              <p role="alert" className="mt-3 text-[0.875rem] font-medium text-clay-500">
+                The shared OpenRouter credit has run out. Reports cannot be written until the
+                administrator tops it up.
+              </p>
+            )}
+          </Card>
+        )}
+
+        {show("reports") && !view.managed.openrouter && (
         <Card
           title="Report writing (OpenRouter)"
           note="Every report is drafted by the first model, then edited by the humaniser model. Both run through the same key."
         >
+          {view.creditsOut && (
+            <p role="alert" className="text-[0.875rem] font-medium text-clay-500">
+              OpenRouter reported that this key has no credit left, so reports are not being
+              written. Add credit in your OpenRouter account, or save a new key below. This notice
+              clears itself on the next report that goes through.
+            </p>
+          )}
           <SecretField
             label="API key"
             view={view.openrouter.apiKey}

@@ -47,13 +47,13 @@ export const updateCompany: typeof file.updateCompany = (...a) => impl().updateC
 
 /* the report template and the organisation's own logo */
 
-export const readTemplate: typeof file.readTemplate = () => impl().readTemplate();
+export const readTemplate: typeof file.readTemplate = (...a) => impl().readTemplate(...a);
 export const saveTemplateDraft: typeof file.saveTemplateDraft = (...a) =>
   impl().saveTemplateDraft(...a);
 export const publishTemplate: typeof file.publishTemplate = (...a) =>
   impl().publishTemplate(...a);
-export const discardTemplateDraft: typeof file.discardTemplateDraft = () =>
-  impl().discardTemplateDraft();
+export const discardTemplateDraft: typeof file.discardTemplateDraft = (...a) =>
+  impl().discardTemplateDraft(...a);
 export const setClientLogo: typeof file.setClientLogo = (...a) => impl().setClientLogo(...a);
 
 /* sharing */
@@ -77,7 +77,7 @@ export const listStakeholderResponses: typeof file.listStakeholderResponses = (.
 
 /* settings and samples */
 
-export const readSettings: typeof file.readSettings = () => impl().readSettings();
+export const readSettings: typeof file.readSettings = (...a) => impl().readSettings(...a);
 export const changeSettings: typeof file.changeSettings = (...a) => impl().changeSettings(...a);
 export const replaceSamples: typeof file.replaceSamples = (...a) => impl().replaceSamples(...a);
 export const removeSamples: typeof file.removeSamples = () => impl().removeSamples();
