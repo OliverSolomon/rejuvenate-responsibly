@@ -358,6 +358,11 @@ export function withHouseFonts(html: string): string {
     `<style data-house-fonts>${FONT_FACE_CSS}` +
     `body{font-family:${DOCUMENT_FONT_STACK};}` +
     `h1,h2,h3,h4{font-family:${DOCUMENT_DISPLAY_STACK};}` +
+    // The sizes the built-in letterhead gives these images, applied to every
+    // template. A template made in the editor has no stylesheet of its own, and
+    // an uploaded logo at its native size would take over the page.
+    `img.logo{max-height:56px;width:auto}img.client-logo{max-height:44px;width:auto}` +
+    `img.stamp{max-height:96px;width:auto}` +
     `</style>`;
 
   if (html.includes("data-house-fonts")) return html;

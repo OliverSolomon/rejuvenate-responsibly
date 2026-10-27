@@ -1,3 +1,4 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import {
   discardTemplateDraft,
@@ -56,6 +57,8 @@ export async function GET() {
 
 /** Save the draft. Nothing a client sees changes until it is published. */
 export async function PUT(request: Request) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await admin();
   if (!user) return denied();
   if (await isShared(user.company, "template")) return sharedNotice();
@@ -96,6 +99,8 @@ export async function PUT(request: Request) {
 
 /** Publish the draft. From here on, new reports are built from it. */
 export async function POST() {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await admin();
   if (!user) return denied();
   if (await isShared(user.company, "template")) return sharedNotice();
@@ -127,6 +132,8 @@ export async function POST() {
 
 /** Throw the draft away and go back to what is published. */
 export async function DELETE() {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await admin();
   if (!user) return denied();
   if (await isShared(user.company, "template")) return sharedNotice();
