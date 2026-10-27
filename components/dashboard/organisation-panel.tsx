@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   BLOC_LABEL,
   COUNTRIES,
@@ -79,38 +80,33 @@ export function OrganisationPanel({
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <label className="flex flex-col gap-2">
           <span className="text-[0.8125rem] font-medium text-forest-900/70">Country</span>
-          <select
+          <Select
             value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className="h-12 rounded-xl border border-forest-900/15 bg-bone-100 px-4 text-[0.9375rem] text-forest-900"
-          >
-            {blocs.map((bloc) => (
-              <optgroup key={bloc} label={BLOC_LABEL[bloc]}>
-                {COUNTRIES.filter((c) => c.bloc === bloc).map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.name}
-                    {c.alsoIn ? ` (also ${c.alsoIn})` : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+            onChange={setCountry}
+            aria-label="Country"
+            className="h-12"
+            options={blocs.flatMap((bloc) =>
+              COUNTRIES.filter((c) => c.bloc === bloc).map((c) => ({
+                value: c.code,
+                label: `${c.name}${c.alsoIn ? ` (also ${c.alsoIn})` : ""}`,
+                group: BLOC_LABEL[bloc],
+              })),
+            )}
+          />
         </label>
 
         <label className="flex flex-col gap-2">
           <span className="text-[0.8125rem] font-medium text-forest-900/70">Currency</span>
-          <select
+          <Select
             value={chosen}
-            onChange={(e) => setChosen(e.target.value)}
-            className="h-12 rounded-xl border border-forest-900/15 bg-bone-100 px-4 text-[0.9375rem] text-forest-900"
-          >
-            <option value="">Follow the country ({following})</option>
-            {choices.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code} · {c.name}
-              </option>
-            ))}
-          </select>
+            onChange={setChosen}
+            aria-label="Currency"
+            className="h-12"
+            options={[
+              { value: "", label: `Follow the country (${following})` },
+              ...choices.map((c) => ({ value: c.code, label: `${c.code} · ${c.name}` })),
+            ]}
+          />
           <span className="text-[0.75rem] leading-relaxed text-forest-900/50">
             {chosen
               ? `Billing in ${currency} whatever the country.`

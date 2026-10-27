@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   callCostUsd,
@@ -11,6 +12,7 @@ import {
   reportCost,
   type ModelPrice,
 } from "@/lib/rmi/model-cost";
+import { EmailPreviewButton } from "@/components/dashboard/email-preview";
 import { EMAIL_KINDS, type EmailKind } from "@/lib/rmi/email-kinds";
 import type { FxRate } from "@/lib/rmi/fx";
 import type { SecretView, SettingsView, Source, TextView } from "@/lib/rmi/settings";
@@ -662,6 +664,12 @@ export function SettingsForm({
   // The save button and the key warning only make sense where there is a field
   // to save. The switches above save themselves as they are flipped.
   const showsSecrets = show("pricing") || show("reports") || show("email");
+  // A company on the shared keys has nothing to fill in on those tabs, so a
+  // save button there would only be a button that does nothing.
+  const hasFields =
+    (show("pricing") && !view.managed.pesapal) ||
+    (show("reports") && !view.managed.openrouter) ||
+    show("email");
 
   return (
     <div className="flex flex-col gap-6">
@@ -729,6 +737,7 @@ export function SettingsForm({
               <div>
                 <p className="text-[0.875rem] font-medium text-forest-900">{k.label}</p>
                 <p className="mt-0.5 text-[0.8125rem] text-forest-900/55">{k.description}</p>
+                <EmailPreviewButton kind={k.id} label={k.label} />
                 {!emailOn && kinds[k.id] && (
                   <p className="mt-1 text-[0.75rem] text-forest-900/50">
                     Held back by the master switch.
@@ -820,14 +829,15 @@ export function SettingsForm({
             tag={<SourceTag source={view.pesapal.env.source} />}
             hint="Sandbox moves no real money. Choose live only once the merchant account is approved."
           >
-            <select
+            <Select
               value={pesapalEnv}
-              onChange={(e) => setPesapalEnv(e.target.value)}
-              className={inputClass}
-            >
-              <option value="sandbox">Sandbox (testing)</option>
-              <option value="live">Live (real money)</option>
-            </select>
+              onChange={setPesapalEnv}
+              aria-label="Pesapal environment"
+              options={[
+                { value: "sandbox", label: "Sandbox (testing)" },
+                { value: "live", label: "Live (real money)" },
+              ]}
+            />
           </Row>
           <TextField
             label="IPN id (optional)"
@@ -925,31 +935,33 @@ export function SettingsForm({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-4">
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            arrow
-            disabled={saving || (sensitive && !acknowledged)}
-          >
-            {saving ? "Saving..." : "Save settings"}
-          </Button>
-          {message && (
-            <p
-              role="status"
-              className={`text-[0.875rem] ${message.kind === "ok" ? "text-forest-700" : "text-clay-500"}`}
+        {hasFields && (
+          <div className="flex flex-wrap items-center gap-4">
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              arrow
+              disabled={saving || (sensitive && !acknowledged)}
             >
-              {message.text}
-            </p>
-          )}
-          {view.updatedAt && (
-            <p className="text-[0.8125rem] text-forest-900/45">
-              Last changed {new Date(view.updatedAt).toLocaleString("en-GB")}
-              {view.updatedBy ? ` by ${view.updatedBy}` : ""}
-            </p>
-          )}
-        </div>
+              {saving ? "Saving..." : "Save settings"}
+            </Button>
+            {message && (
+              <p
+                role="status"
+                className={`text-[0.875rem] ${message.kind === "ok" ? "text-forest-700" : "text-clay-500"}`}
+              >
+                {message.text}
+              </p>
+            )}
+            {view.updatedAt && (
+              <p className="text-[0.8125rem] text-forest-900/45">
+                Last changed {new Date(view.updatedAt).toLocaleString("en-GB")}
+                {view.updatedBy ? ` by ${view.updatedBy}` : ""}
+              </p>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

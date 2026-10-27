@@ -8,6 +8,7 @@ import { SamplesPanel } from "@/components/dashboard/samples-panel";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { SettingsTabs, type Tab } from "@/components/dashboard/settings-tabs";
 import { StoragePanel } from "@/components/dashboard/storage-panel";
+import { TemplateWorkspace } from "@/components/dashboard/template-workspace";
 import { TiersPanel } from "@/components/dashboard/tiers-panel";
 import { WebsitePanel } from "@/components/dashboard/website-panel";
 import { companyRows } from "@/lib/rmi/companies";
@@ -19,7 +20,6 @@ import {
   brandAssets,
   contactDetails,
   place,
-  samplesHidden,
   settingsView,
   socialLinks,
   tiers,
@@ -34,7 +34,7 @@ import {
 
 export const metadata: Metadata = pageMeta({
   title: "Settings",
-  description: "Organisation, branding, pricing, email and storage for Rate My Impact.",
+  description: "Organisation, branding, pricing, report template and email for Rate My Impact.",
   path: "/dashboard/settings",
   private: true,
 });
@@ -82,18 +82,17 @@ export default async function SettingsPage() {
   // say so here rather than failing the page on the first missing column.
   const blocked = status !== null && !status.schemaReady;
 
-  const [view, loaded, brand, template, where, contact, socials, priced, hideSamples] = blocked
-    ? [null, { assessments: 0, responses: 0 }, {}, { version: 0 }, null, null, [], [], false]
+  const [view, loaded, brand, template, where, contact, socials, priced] = blocked
+    ? [null, { assessments: 0, responses: 0 }, {}, { version: 0 }, null, null, [], []]
     : await Promise.all([
         settingsView(),
-        countSamples(),
+        countSamples(scope?.companyId ? [scope.companyId] : undefined),
         brandAssets(),
         readTemplate(),
         place(),
         contactDetails(),
         socialLinks(),
         tiers(),
-        samplesHidden(),
       ]);
 
   const currency = where?.currency ?? "USD";
@@ -195,14 +194,7 @@ export default async function SettingsPage() {
     {
       id: "template",
       label: "Report template",
-      panel: (
-        <Onward
-          title="Report template"
-          blurb="The letterhead, footer and standing wording every report is wrapped in, with a draft and a published version."
-          href="/dashboard/settings/report-template"
-          action="Open the editor"
-        />
-      ),
+      panel: <TemplateWorkspace />,
     },
     {
       id: "email",
@@ -235,7 +227,7 @@ export default async function SettingsPage() {
       id: "samples",
       label: "Sample data",
       panel: view ? (
-        <SamplesPanel cases={SAMPLE_CASES} loaded={loaded} hidden={hideSamples} />
+        <SamplesPanel cases={SAMPLE_CASES} loaded={loaded} />
       ) : (
         storage
       ),
@@ -258,15 +250,12 @@ export default async function SettingsPage() {
     });
   }
 
-  // Last on purpose: the plumbing comes after everything a client sees.
-  tabs.push({ id: "developer", label: "Supabase and keys", panel: storage });
-
   return (
     <div>
       <h1 className="display text-[clamp(1.75rem,3.4vw,2.5rem)]">Settings</h1>
       <p className="mt-3 max-w-[58ch] text-[0.9375rem] leading-relaxed text-forest-900/60">
-        One subject at a time. A value saved here wins over the server environment; leave a field
-        alone and the environment applies.
+        One subject at a time. For your own keys, a value saved here wins over the server
+        environment; leave a field alone and the environment applies.
       </p>
 
       <div className="mt-8">
