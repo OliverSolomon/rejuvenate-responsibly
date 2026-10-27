@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { getDashboardUser, type DashboardUser, type TeamRole } from "@/utils/supabase/server";
 
 /**
@@ -30,8 +30,6 @@ import { getDashboardUser, type DashboardUser, type TeamRole } from "@/utils/sup
 
 export const DEFAULT_COMPANY = "default";
 
-/** Which company a super admin is looking at. Absent means all of them. */
-const VIEW_COOKIE = "rmi_company_view";
 
 export type Scope = {
   user: DashboardUser;
@@ -77,9 +75,9 @@ export async function currentScope(): Promise<Scope | null> {
     };
   }
 
-  // A super admin's choice of view lives in a cookie: it is how they are
-  // looking at the data, not a fact about them worth storing.
-  const chosen = (await cookies()).get(VIEW_COOKIE)?.value?.trim();
+  // Which companies a super admin is looking at is remembered on their account,
+  // so signing out and in again puts them back where they were.
+  const chosen = user.prefs.view?.trim();
   const companyId = chosen && chosen !== "all" ? chosen : null;
 
   return {
@@ -118,6 +116,20 @@ export function teamView(scope: Scope): { companyId: string | null; includeSuper
   };
 }
 
+/**
+ * Members can look at their company's work and change none of it. Every route
+ * that writes starts with this, since the interface hiding a button is not what
+ * stops a request: the route has to.
+ */
+export async function memberBlocked(): Promise<NextResponse | null> {
+  const user = await getDashboardUser();
+  if (user?.role !== "member") return null;
+  return NextResponse.json(
+    { error: "A member can look but not change anything. Ask an admin of your company." },
+    { status: 403 },
+  );
+}
+
 /** Only a super admin may change the keys the whole installation shares. */
 export function canConfigureInstallation(scope: Scope): boolean {
   return scope.isSuper;
@@ -128,4 +140,21 @@ export function canManageTeam(scope: Scope): boolean {
   return scope.isSuper || scope.role === "owner";
 }
 
-export const COMPANY_VIEW_COOKIE = VIEW_COOKIE;
+
+/**
+ * Live or demo.
+ *
+ * Live is the real platform: real clients only, and the banners for anything
+ * not set up. Demo is for showing it to somebody: only the sample submissions,
+ * and none of the banners, since a missing key is not something to put in front
+ * of a prospect. It is how this person is looking, not a fact about the
+ * company, so it is saved on their account like the company view is, and
+ * survives signing out. Everyone starts on demo, so nobody's first look at the
+ * dashboard is of anything but sample data, and moves to live on purpose.
+ */
+export type ViewMode = "live" | "demo";
+
+export async function viewMode(): Promise<ViewMode> {
+  const user = await getDashboardUser();
+  return user?.prefs.mode === "live" ? "live" : "demo";
+}

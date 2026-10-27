@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { SUPABASE_ENV_HINT, SUPABASE_KEY, SUPABASE_URL, supabaseConfigured } from "./env";
 
 export { supabaseConfigured };
@@ -34,18 +35,28 @@ export async function createClient() {
  * `super` is the one account that sees every company and holds the keys the
  * whole installation shares. Other admins cannot see that the role exists.
  */
-export type TeamRole = "super" | "owner" | "admin";
+export type TeamRole = "super" | "owner" | "admin" | "member";
+
+/** How someone last left the dashboard. Kept on their account; see lib/rmi/prefs.ts. */
+export type DashboardPrefs = {
+  mode?: "live" | "demo";
+  /** A company id, or "all". */
+  view?: string;
+  /** Ids of the set-up notices they have closed. */
+  dismissed?: string[];
+};
 
 export type DashboardUser = {
   id: string;
   email: string;
   name: string | null;
-  /** Owners manage the team; admins do everything else. */
+  /** Owners manage the team; admins do everything else; members read and change nothing. */
   role: TeamRole;
   /** Which company they work for. */
   companyId: string;
   /** When this sign-in began, which is what "since you signed in" is measured from. */
   signedInAt: string | null;
+  prefs: DashboardPrefs;
 };
 
 /**
@@ -56,7 +67,7 @@ export type DashboardUser = {
  * the team reads nothing. Anything unexpected returns null: this fails closed,
  * including the role, which falls back to the lesser of the two.
  */
-export async function getDashboardUser(): Promise<DashboardUser | null> {
+export const getDashboardUser = cache(async (): Promise<DashboardUser | null> => {
   if (!supabaseConfigured()) return null;
 
   try {
@@ -77,12 +88,33 @@ export async function getDashboardUser(): Promise<DashboardUser | null> {
       id: data.id,
       email: data.email,
       name: data.full_name,
-      // Anything unrecognised falls to the least privileged of the three.
-      role: data.role === "super" ? "super" : data.role === "owner" ? "owner" : "admin",
+      // Anything unrecognised falls to the least privileged: a member, who can only look.
+      role:
+        data.role === "super"
+          ? "super"
+          : data.role === "owner"
+            ? "owner"
+            : data.role === "admin"
+              ? "admin"
+              : "member",
       companyId: data.company_id || "default",
       signedInAt: user.last_sign_in_at ?? null,
+      prefs: readPrefs(user.user_metadata?.rmi_prefs),
     };
   } catch {
     return null;
   }
+});
+
+/** What was saved, trusted only as far as its shape: anything else is as if nothing was. */
+function readPrefs(raw: unknown): DashboardPrefs {
+  if (!raw || typeof raw !== "object") return {};
+  const p = raw as Record<string, unknown>;
+  return {
+    mode: p.mode === "live" || p.mode === "demo" ? p.mode : undefined,
+    view: typeof p.view === "string" && p.view ? p.view : undefined,
+    dismissed: Array.isArray(p.dismissed)
+      ? p.dismissed.filter((v): v is string => typeof v === "string")
+      : [],
+  };
 }
