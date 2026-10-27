@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   TeamError,
+  changeCompany,
   changeRole,
   makeInvitation,
   removeMember,
@@ -80,6 +81,16 @@ export async function PATCH(
             allowSuper: gate.scope!.isSuper,
           }),
         });
+
+      case "company":
+        // Which company someone belongs to is the installation's call.
+        if (!gate.scope!.isSuper) {
+          return NextResponse.json(
+            { error: "Only a super admin can move someone to another company." },
+            { status: 403 },
+          );
+        }
+        return NextResponse.json({ member: await changeCompany(id, body.companyId, view) });
 
       case "name":
         return NextResponse.json({ member: await updateName(id, body.fullName, view) });

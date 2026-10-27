@@ -5,6 +5,7 @@ import { TeamPanel } from "@/components/dashboard/team-panel";
 import { pageMeta } from "@/lib/seo";
 import { TeamError, listTeam, teamConfigured, type TeamMember } from "@/lib/rmi/team";
 import { currentScope, teamView } from "@/lib/rmi/scope";
+import { listCompanies } from "@/lib/rmi/store";
 
 export const metadata: Metadata = pageMeta({
   title: "Team",
@@ -60,6 +61,11 @@ export default async function TeamPage() {
           team={team}
           you={{ id: user.id, email: user.email, role: user.role }}
           configured={configured}
+          companies={
+            scope.isSuper
+              ? (await listCompanies().catch(() => [])).map((c) => ({ id: c.id, name: c.name }))
+              : null
+          }
         />
       </div>
 

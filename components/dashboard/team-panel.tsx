@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,8 +29,11 @@ export function TeamPanel({
   team,
   you,
   configured,
+  companies,
 }: {
   team: TeamMember[];
+  /** Every company, for a super admin to place people in. Null for anyone else. */
+  companies: { id: string; name: string }[] | null;
   you: { id: string; email: string; role: TeamRole };
   /** Without the service role key no account can be created at all. */
   configured: boolean;
@@ -45,6 +49,7 @@ export function TeamPanel({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState<TeamRole>("admin");
+  const [companyId, setCompanyId] = useState("");
   const [how, setHow] = useState<"invite" | "password">("invite");
   const [password, setPassword] = useState("");
 
@@ -55,6 +60,7 @@ export function TeamPanel({
     setEmail("");
     setFullName("");
     setRole("admin");
+    setCompanyId("");
     setHow("invite");
     setPassword("");
     setAdding(false);
@@ -71,6 +77,8 @@ export function TeamPanel({
           email,
           fullName,
           role,
+          // Only a super admin gets to choose; for anyone else the server uses their own company.
+          ...(isSuper && companyId && role !== "super" ? { companyId } : {}),
           ...(how === "password" ? { password } : {}),
         }),
       });
@@ -169,8 +177,10 @@ export function TeamPanel({
           <h2 className="display text-[1.125rem]">Team</h2>
           <p className="mt-2 max-w-[62ch] text-[0.875rem] leading-relaxed text-forest-900/60">
             Everyone who can open the dashboard. Owners add and remove people and change roles;
-            admins do everything else. Sign in is by email and password, and there is no way in
-            except from this list.
+            admins do everything else; members can look at their company&apos;s work and change
+            nothing. People an admin adds join that admin&apos;s company; a super admin places them
+            in any company. Sign in is by email and password, and there is no way in except from
+            this list.
           </p>
         </div>
         {isOwner && !adding && (
@@ -189,8 +199,8 @@ export function TeamPanel({
 
       {!isOwner && (
         <p className="mt-5 rounded-xl border border-forest-900/10 bg-forest-900/[0.04] p-4 text-[0.8125rem] leading-relaxed text-forest-900/65">
-          You are an admin, so this list is read only for you. Ask an owner to add or remove
-          anyone. You can still change your own password.
+          You are {you.role === "member" ? "a member" : "an admin"}, so this list is read only for
+          you. Ask an owner to add or remove anyone. You can still change your own password.
         </p>
       )}
 
@@ -239,33 +249,45 @@ export function TeamPanel({
             </label>
             <label className="flex flex-col gap-2">
               <span className="text-[0.8125rem] font-medium text-forest-900/70">Role</span>
-              <select
+              <Select
                 value={role}
-                onChange={(e) => {
-                  const picked = e.target.value;
-                  setRole(picked === "owner" || picked === "super" ? picked : "admin");
-                }}
-                className="h-11 rounded-xl border border-forest-900/15 bg-bone-50 px-3.5 text-[0.9375rem]"
-              >
-                <option value="admin">Admin, cannot manage the team</option>
-                <option value="owner">Owner, can manage the team</option>
-                {isSuper && (
-                  <option value="super">Super admin, sees every company</option>
-                )}
-              </select>
+                onChange={(picked) => setRole(picked as TeamRole)}
+                aria-label="Role"
+                options={[
+                  { value: "member", label: "Member", hint: "Can look, cannot change anything" },
+                  { value: "admin", label: "Admin", hint: "Works in the company, cannot manage the team" },
+                  { value: "owner", label: "Owner", hint: "Can also manage the team" },
+                  ...(isSuper
+                    ? [{ value: "super", label: "Super admin", hint: "Sees every company" }]
+                    : []),
+                ]}
+              />
             </label>
+            {isSuper && companies && role !== "super" && (
+              <label className="flex flex-col gap-2">
+                <span className="text-[0.8125rem] font-medium text-forest-900/70">Company</span>
+                <Select
+                  value={companyId}
+                  onChange={setCompanyId}
+                  aria-label="Company"
+                  placeholder="The company I am managing"
+                  options={companies.map((c) => ({ value: c.id, label: c.name }))}
+                />
+              </label>
+            )}
             <label className="flex flex-col gap-2">
               <span className="text-[0.8125rem] font-medium text-forest-900/70">
                 How they get in
               </span>
-              <select
+              <Select
                 value={how}
-                onChange={(e) => setHow(e.target.value === "password" ? "password" : "invite")}
-                className="h-11 rounded-xl border border-forest-900/15 bg-bone-50 px-3.5 text-[0.9375rem]"
-              >
-                <option value="invite">Email them a link to set their own password</option>
-                <option value="password">I will set their password now</option>
-              </select>
+                onChange={(v) => setHow(v === "password" ? "password" : "invite")}
+                aria-label="How they get in"
+                options={[
+                  { value: "invite", label: "Email them a link to set their own password" },
+                  { value: "password", label: "I will set their password now" },
+                ]}
+              />
             </label>
 
             {how === "password" && (
@@ -312,9 +334,14 @@ export function TeamPanel({
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2 text-[0.9375rem] text-forest-900">
                   <span className="font-medium">{member.name || member.email}</span>
-                  <Badge tone={member.role === "admin" ? "neutral" : "strong"}>
+                  <Badge tone={member.role === "admin" || member.role === "member" ? "neutral" : "strong"}>
                     {member.role === "super" ? "super admin" : member.role}
                   </Badge>
+                  {isSuper && member.role !== "super" && (
+                    <Badge tone="quiet">
+                      {companies?.find((c) => c.id === member.companyId)?.name ?? member.companyId}
+                    </Badge>
+                  )}
                   <Badge tone={s.tone === "good" ? "good" : "pending"}>{s.label}</Badge>
                   {isYou && <span className="text-[0.75rem] text-forest-900/45">that is you</span>}
                 </p>
@@ -361,25 +388,47 @@ export function TeamPanel({
                   </Button>
 
                   {!isYou && !lastOwner && member.role !== "super" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={working}
-                      onClick={() =>
-                        void act(
-                          member,
-                          { action: "role", role: member.role === "owner" ? "admin" : "owner" },
-                          () => ({
+                    <div className="w-36">
+                      <Select
+                        value={member.role}
+                        aria-label={`Role for ${member.email}`}
+                        className="h-9 text-[0.8125rem]"
+                        disabled={working}
+                        onChange={(next) =>
+                          void act(member, { action: "role", role: next }, () => ({
                             kind: "ok",
                             text: `${member.email} is now ${
-                              member.role === "owner" ? "an admin" : "an owner"
+                              next === "owner" ? "an owner" : next === "admin" ? "an admin" : "a member"
                             }.`,
-                          }),
-                        )
-                      }
-                    >
-                      Make {member.role === "owner" ? "an admin" : "an owner"}
-                    </Button>
+                          }))
+                        }
+                        options={[
+                          { value: "member", label: "Member" },
+                          { value: "admin", label: "Admin" },
+                          { value: "owner", label: "Owner" },
+                        ]}
+                      />
+                    </div>
+                  )}
+
+                  {isSuper && companies && !isYou && member.role !== "super" && (
+                    <div className="w-48">
+                      <Select
+                        value={member.companyId}
+                        aria-label={`Company for ${member.email}`}
+                        className="h-9 text-[0.8125rem]"
+                        disabled={working}
+                        onChange={(next) =>
+                          void act(member, { action: "company", companyId: next }, () => ({
+                            kind: "ok",
+                            text: `${member.email} now works in ${
+                              companies.find((c) => c.id === next)?.name ?? next
+                            }.`,
+                          }))
+                        }
+                        options={companies.map((c) => ({ value: c.id, label: c.name }))}
+                      />
+                    </div>
                   )}
 
                   {isSuper && !isYou && member.role !== "super" && (

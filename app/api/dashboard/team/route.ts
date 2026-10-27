@@ -58,9 +58,12 @@ export async function POST(request: Request) {
       // Absent means invite them; present means the owner is setting it.
       password: body.password === undefined || body.password === "" ? undefined : body.password,
       by: user.email,
-      // Whichever company they are managing, which for a super admin in the
-      // global view is their own.
-      companyId: settingsCompany(scope),
+      // An owner's people join the owner's company. Only a super admin chooses
+      // one, and without a choice it is the company they are managing.
+      companyId:
+        scope.isSuper && typeof body.companyId === "string" && body.companyId.trim()
+          ? body.companyId.trim()
+          : settingsCompany(scope),
       allowSuper: scope.isSuper,
     });
 

@@ -143,6 +143,11 @@ export function assertCanRemove(team: TeamMember[], id: string, actorId: string)
   }
 }
 
+/** A role from the database or a request, with anything unrecognised read as the least privileged. */
+function asRole(value: unknown): TeamRole {
+  return value === "super" || value === "owner" || value === "admin" ? value : "member";
+}
+
 export function assertCanChangeRole(
   team: TeamMember[],
   id: string,
@@ -225,7 +230,7 @@ export async function listTeam(view: TeamView): Promise<TeamMember[]> {
       email: row.email,
       companyId: row.company_id ?? "default",
       name: row.full_name,
-      role: row.role === "super" ? "super" : row.role === "owner" ? "owner" : "admin",
+      role: asRole(row.role),
       addedAt: row.created_at,
       invitedBy: row.invited_by,
       invitedAt: row.invited_at,
@@ -275,7 +280,9 @@ export async function addMember(input: {
     throw new TeamError("Only a super admin can add another super admin.", 403);
   }
   const role: TeamRole =
-    input.role === "super" ? "super" : input.role === "owner" ? "owner" : "admin";
+    input.role === "super" || input.role === "owner" || input.role === "member"
+      ? input.role
+      : "admin";
   // A super admin answers to the installation, not to one firm's team.
   const companyId = role === "super" ? "default" : input.companyId;
   const view: TeamView = { companyId: null, includeSuper: true };
@@ -389,8 +396,8 @@ export async function changeRole(
   view: TeamView,
   options: { allowSuper?: boolean } = {},
 ): Promise<TeamMember> {
-  if (role !== "owner" && role !== "admin" && role !== "super") {
-    throw new TeamError("A role is super admin, owner or admin.", 400);
+  if (role !== "owner" && role !== "admin" && role !== "super" && role !== "member") {
+    throw new TeamError("A role is super admin, owner, admin or member.", 400);
   }
   if (role === "super" && !options.allowSuper) {
     throw new TeamError("Only a super admin can make someone a super admin.", 403);
@@ -406,6 +413,30 @@ export async function changeRole(
 
   const { error } = await admin().from("rmi_admins").update(patch).eq("id", id);
   if (error) throw new TeamError(`The role could not be changed: ${error.message}`, 502);
+  return member(id, view);
+}
+
+/**
+ * Move someone to another company. Only a super admin does this, and never to a
+ * super admin, who answers to the installation rather than to one firm.
+ */
+export async function changeCompany(
+  id: string,
+  companyId: unknown,
+  view: TeamView,
+): Promise<TeamMember> {
+  const target = await member(id, view);
+  if (target.role === "super") {
+    throw new TeamError("A super admin belongs to the installation, not to a company.", 409);
+  }
+  if (typeof companyId !== "string" || !companyId.trim()) {
+    throw new TeamError("Say which company.", 400);
+  }
+  const { data } = await admin().from("rmi_companies").select("id").eq("id", companyId).maybeSingle();
+  if (!data) throw new TeamError("That company does not exist.", 404);
+
+  const { error } = await admin().from("rmi_admins").update({ company_id: companyId }).eq("id", id);
+  if (error) throw new TeamError(`They could not be moved: ${error.message}`, 502);
   return member(id, view);
 }
 

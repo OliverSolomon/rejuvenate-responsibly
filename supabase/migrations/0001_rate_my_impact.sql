@@ -414,7 +414,8 @@ alter table public.rmi_admins
 
 alter table public.rmi_admins alter column role set default 'admin';
 
--- Three roles now, so a check written when there were two has to be replaced.
+-- Four roles now (a member can look and change nothing), so a check written for
+-- fewer has to be replaced.
 -- Dropping and adding a check touches no row; it only changes what may be
 -- written from here on.
 do $$
@@ -426,11 +427,11 @@ begin
 
   if current_def is null then
     alter table public.rmi_admins
-      add constraint rmi_admins_role_check check (role in ('super', 'owner', 'admin'));
-  elsif current_def not like '%super%' then
+      add constraint rmi_admins_role_check check (role in ('super', 'owner', 'admin', 'member'));
+  elsif current_def not like '%member%' then
     alter table public.rmi_admins drop constraint rmi_admins_role_check;
     alter table public.rmi_admins
-      add constraint rmi_admins_role_check check (role in ('super', 'owner', 'admin'));
+      add constraint rmi_admins_role_check check (role in ('super', 'owner', 'admin', 'member'));
   end if;
 end $$;
 
