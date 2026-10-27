@@ -8,16 +8,12 @@ import type { SampleCase } from "@/lib/rmi/samples";
 export function SamplesPanel({
   cases,
   loaded,
-  hidden: initialHidden,
 }: {
   cases: SampleCase[];
   loaded: { assessments: number; responses: number };
-  /** Loaded but kept out of every view. */
-  hidden: boolean;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<null | "load" | "remove" | "hide">(null);
-  const [hidden, setHidden] = useState(initialHidden);
+  const [busy, setBusy] = useState<null | "load" | "remove">(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmOff, setConfirmOff] = useState(false);
 
@@ -43,33 +39,6 @@ export function SamplesPanel({
 
   const on = loaded.assessments > 0;
 
-  /**
-   * Hiding is not removing. It keeps the rows where they are and takes them out
-   * of every view, which is how the dashboard can be seen as it will look with
-   * only real work in it without throwing away something useful for testing.
-   */
-  async function toggleHidden(next: boolean) {
-    setBusy("hide");
-    setError(null);
-    try {
-      const res = await fetch("/api/dashboard/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ samplesHidden: next }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error ?? "That did not work.");
-      }
-      setHidden(next);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "That did not work.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
     <section className="rounded-card border border-forest-900/10 bg-bone-50 p-6 sm:p-8">
       <div className="flex items-start justify-between gap-6">
@@ -77,9 +46,9 @@ export function SamplesPanel({
           <h2 className="display text-[1.375rem]">Sample submissions</h2>
           <p className="mt-2 max-w-[62ch] text-[0.875rem] leading-relaxed text-forest-900/60">
             {cases.length} invented organisations for trying the dashboard and the report flow. They
-            appear in Analytics, Responses and the delivery alerts, each carrying a Sample status badge.{" "}
-            <strong>Turning this off removes every sample submission</strong> from the database. To
-            keep them but take them out of sight, use the switch below instead.
+            appear in Analytics, Responses and the delivery alerts while the top bar is on Demo, each
+            carrying a Sample status badge.{" "}
+            <strong>Turning this off removes every sample submission</strong> from the database.
             Real submissions are never touched. All their addresses are on example.org and no email
             is sent.
           </p>
@@ -114,35 +83,10 @@ export function SamplesPanel({
       </p>
 
       {on && (
-        <div className="mt-5 flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-forest-900/10 bg-bone-100 p-4">
-          <div>
-            <p className="text-[0.875rem] font-medium text-forest-900">
-              Hide them from every view
-            </p>
-            <p className="mt-1 max-w-[52ch] text-[0.8125rem] leading-relaxed text-forest-900/60">
-              {hidden
-                ? "Hidden. Analytics, Responses and the delivery alerts show only real work. The samples are still loaded and nothing has been deleted."
-                : "Showing. Turn this on to see the dashboard as it will look with only real work in it, without removing anything."}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={hidden}
-            aria-label="Hide sample submissions"
-            disabled={busy !== null}
-            onClick={() => void toggleHidden(!hidden)}
-            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
-              hidden ? "bg-forest-900" : "bg-forest-900/25"
-            }`}
-          >
-            <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-bone-50 transition-all ${
-                hidden ? "left-6" : "left-1"
-              }`}
-            />
-          </button>
-        </div>
+        <p className="mt-5 rounded-2xl border border-forest-900/10 bg-bone-100 p-4 text-[0.8125rem] leading-relaxed text-forest-900/60">
+          To see them, switch the top bar from Live to Demo. Live shows real clients only, so the
+          samples stay out of sight there without being removed.
+        </p>
       )}
 
       {confirmOff && (

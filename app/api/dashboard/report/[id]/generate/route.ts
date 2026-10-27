@@ -1,9 +1,10 @@
+import { memberBlocked } from "@/lib/rmi/scope";
+import { ownedAssessment } from "@/lib/rmi/dashboard";
 import { NextResponse } from "next/server";
 import { OpenRouterError } from "@/lib/rmi/openrouter";
 import { generateReport } from "@/lib/rmi/report";
 import { reportConfigured } from "@/lib/rmi/settings";
 import {
-  getAssessment,
   listStakeholderResponses,
   normaliseCode,
   setReport,
@@ -23,13 +24,15 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });
   }
 
   const { id } = await params;
-  const assessment = await getAssessment(normaliseCode(id));
+  const assessment = await ownedAssessment(normaliseCode(id));
   if (!assessment) {
     return NextResponse.json({ error: "No assessment with that reference." }, { status: 404 });
   }

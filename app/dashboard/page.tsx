@@ -3,6 +3,9 @@ import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { getFeed } from "@/lib/rmi/activity";
 import { analytics } from "@/lib/rmi/dashboard";
+import { currentScope } from "@/lib/rmi/scope";
+import { listCompanies } from "@/lib/rmi/store";
+import { CompaniesCard } from "@/components/dashboard/companies-card";
 import { ActivityCard } from "@/components/dashboard/activity-card";
 import { Stat } from "@/components/dashboard/stat";
 import { SampleBadge } from "@/components/dashboard/status";
@@ -24,7 +27,13 @@ export const metadata: Metadata = pageMeta({
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
+  const scope = await currentScope();
   const [a, feed] = await Promise.all([analytics(), getFeed().catch(() => null)]);
+  // Names for the activity rows, only when more than one company is in view.
+  const names =
+    scope?.companyId === null
+      ? new Map((await listCompanies().catch(() => [])).map((c) => [c.id, c.name]))
+      : null;
   const responseRate =
     a.totals.stakeholders > 0
       ? Math.round((a.totals.responded / a.totals.stakeholders) * 100)
@@ -52,7 +61,7 @@ export default async function AnalyticsPage() {
 
       {feed && (
         <div className="mt-8">
-          <ActivityCard feed={feed} />
+          <ActivityCard feed={feed} now={feed.readAt} companies={names ? Object.fromEntries(names) : null} />
         </div>
       )}
 
@@ -101,6 +110,11 @@ export default async function AnalyticsPage() {
           <GapChart data={a.commonGaps} />
         </div>
       )}
+
+      {/* Last, after the figures and charts: it is the reference for the rest. */}
+      <div className="mt-8 empty:hidden">
+        <CompaniesCard />
+      </div>
     </div>
   );
 }

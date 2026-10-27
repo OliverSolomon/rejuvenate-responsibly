@@ -237,11 +237,10 @@ export type StoredSettings = {
       hidden?: boolean;
     }
   >;
-  /**
-   * Sample data loaded from the dashboard. Hiding takes it out of every view
-   * without deleting it, so the dashboard can be seen as it will really look.
-   */
+  /** Sample data loaded from the dashboard. Whether it shows is the view mode, not a setting. */
   samples?: { hidden?: boolean };
+  /** An invented company kept for demonstrating, shown with a Sample badge. */
+  sample?: boolean;
   /** The logo and stamp the report template draws on. */
   brand?: {
     logo?: BrandAsset;

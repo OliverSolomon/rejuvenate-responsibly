@@ -581,23 +581,36 @@ export async function setClientLogo(
 }
 
 /** Replace any earlier sample set with a fresh one. Real records are untouched. */
+/** Whether a sample assessment is one of the given companies', or any when none are named. */
+const inCompanies = (a: Assessment, companyIds?: string[]) =>
+  Boolean(a.sample) && (!companyIds || companyIds.includes(a.companyId || DEFAULT_COMPANY));
+
+/**
+ * Swap the sample set for the named companies' for a fresh one. Another
+ * company's samples and every real record are left exactly as they were.
+ */
 export async function replaceSamples(
   assessments: Assessment[],
   responses: StakeholderResponse[],
+  companyIds?: string[],
 ): Promise<void> {
   return transact((db) => {
-    db.assessments = db.assessments.filter((a) => !a.sample);
-    db.stakeholderResponses = db.stakeholderResponses.filter((r) => !r.sample);
+    const gone = new Set(db.assessments.filter((a) => inCompanies(a, companyIds)).map((a) => a.id));
+    db.assessments = db.assessments.filter((a) => !gone.has(a.id));
+    db.stakeholderResponses = db.stakeholderResponses.filter((r) => !gone.has(r.assessmentId));
     db.assessments.push(...assessments);
     db.stakeholderResponses.push(...responses);
   });
 }
 
-export async function removeSamples(): Promise<{ assessments: number; responses: number }> {
+export async function removeSamples(
+  companyIds?: string[],
+): Promise<{ assessments: number; responses: number }> {
   return transact((db) => {
+    const gone = new Set(db.assessments.filter((a) => inCompanies(a, companyIds)).map((a) => a.id));
     const before = { assessments: db.assessments.length, responses: db.stakeholderResponses.length };
-    db.assessments = db.assessments.filter((a) => !a.sample);
-    db.stakeholderResponses = db.stakeholderResponses.filter((r) => !r.sample);
+    db.assessments = db.assessments.filter((a) => !gone.has(a.id));
+    db.stakeholderResponses = db.stakeholderResponses.filter((r) => !gone.has(r.assessmentId));
     return {
       assessments: before.assessments - db.assessments.length,
       responses: before.responses - db.stakeholderResponses.length,
@@ -605,11 +618,14 @@ export async function removeSamples(): Promise<{ assessments: number; responses:
   });
 }
 
-export async function countSamples(): Promise<{ assessments: number; responses: number }> {
+export async function countSamples(
+  companyIds?: string[],
+): Promise<{ assessments: number; responses: number }> {
   const db = await read();
+  const ours = new Set(db.assessments.filter((a) => inCompanies(a, companyIds)).map((a) => a.id));
   return {
-    assessments: db.assessments.filter((a) => a.sample).length,
-    responses: db.stakeholderResponses.filter((r) => r.sample).length,
+    assessments: ours.size,
+    responses: db.stakeholderResponses.filter((r) => ours.has(r.assessmentId)).length,
   };
 }
 

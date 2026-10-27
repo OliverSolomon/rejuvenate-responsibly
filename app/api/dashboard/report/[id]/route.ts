@@ -1,4 +1,6 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
+import { ownedAssessment } from "@/lib/rmi/dashboard";
 import { editReport, normaliseCode } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
 
@@ -15,6 +17,8 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });
@@ -34,6 +38,10 @@ export async function PUT(
   }
   if (markdown.length > LIMIT) {
     return NextResponse.json({ error: "That report is too long to save." }, { status: 413 });
+  }
+
+  if (!(await ownedAssessment(normaliseCode(id)))) {
+    return NextResponse.json({ error: "No report exists for that assessment." }, { status: 404 });
   }
 
   const updated = await editReport(normaliseCode(id), markdown, user.email, user.id);

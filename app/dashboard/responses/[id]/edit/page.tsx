@@ -1,7 +1,8 @@
+import { normaliseCode } from "@/lib/rmi/store";
+import { ownedAssessment } from "@/lib/rmi/dashboard";
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
 import { notFound } from "next/navigation";
-import { getAssessment } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
 import { ReportEditor } from "@/components/dashboard/report-editor";
 
@@ -23,7 +24,7 @@ export default async function EditReportPage({
   params,
 }: PageProps<"/dashboard/responses/[id]/edit">) {
   const { id } = await params;
-  const [assessment, user] = await Promise.all([getAssessment(id), getDashboardUser()]);
+  const [assessment, user] = await Promise.all([ownedAssessment(normaliseCode(id)), getDashboardUser()]);
   if (!assessment?.report || !user) notFound();
 
   return (

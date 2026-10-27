@@ -1007,10 +1007,13 @@ export async function changeSettings(
 export async function replaceSamples(
   assessments: Assessment[],
   responses: StakeholderResponse[],
+  companyIds?: string[],
 ): Promise<void> {
-  // Only rows flagged `sample` are ever removed. Cascades take their shares,
-  // responses and reports with them.
-  const cleared = await db().from("rmi_assessments").delete().eq("sample", true);
+  // Only rows flagged `sample`, and only in the named companies, are ever
+  // removed. Cascades take their shares, responses and reports with them.
+  let clearing = db().from("rmi_assessments").delete().eq("sample", true);
+  if (companyIds) clearing = clearing.in("company_id", companyIds);
+  const cleared = await clearing;
   if (cleared.error) fail("clear samples", cleared.error);
 
   await insertChunks(
@@ -1052,22 +1055,39 @@ export async function replaceSamples(
   );
 }
 
-export async function countSamples(): Promise<{ assessments: number; responses: number }> {
-  const [a, r] = await Promise.all([
-    db().from("rmi_assessments").select("id", { count: "exact", head: true }).eq("sample", true),
-    db()
+export async function countSamples(
+  companyIds?: string[],
+): Promise<{ assessments: number; responses: number }> {
+  let assessments = db()
+    .from("rmi_assessments")
+    .select("id", { count: "exact" })
+    .eq("sample", true);
+  if (companyIds) assessments = assessments.in("company_id", companyIds);
+  const a = await assessments;
+  if (a.error) fail("count samples", a.error);
+
+  // A response has no company of its own, so it is counted through its assessment.
+  const ids = (a.data ?? []).map((row: { id: string }) => row.id);
+  let responses = 0;
+  if (ids.length) {
+    const r = await db()
       .from("rmi_stakeholder_responses")
       .select("id", { count: "exact", head: true })
-      .eq("sample", true),
-  ]);
-  if (a.error) fail("count samples", a.error);
-  if (r.error) fail("count samples", r.error);
-  return { assessments: a.count ?? 0, responses: r.count ?? 0 };
+      .eq("sample", true)
+      .in("assessment_id", ids);
+    if (r.error) fail("count samples", r.error);
+    responses = r.count ?? 0;
+  }
+  return { assessments: a.count ?? 0, responses };
 }
 
-export async function removeSamples(): Promise<{ assessments: number; responses: number }> {
-  const before = await countSamples();
-  const { error } = await db().from("rmi_assessments").delete().eq("sample", true);
+export async function removeSamples(
+  companyIds?: string[],
+): Promise<{ assessments: number; responses: number }> {
+  const before = await countSamples(companyIds);
+  let removing = db().from("rmi_assessments").delete().eq("sample", true);
+  if (companyIds) removing = removing.in("company_id", companyIds);
+  const { error } = await removing;
   if (error) fail("remove samples", error);
   return before;
 }

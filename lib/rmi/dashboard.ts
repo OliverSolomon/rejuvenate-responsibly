@@ -5,6 +5,7 @@ import { scoreAssessment } from "./scoring";
 import { currentScope } from "./scope";
 import { samplesHidden } from "./settings";
 import {
+  getAssessment,
   isUndelivered,
   listAllStakeholderResponses,
   listAssessments,
@@ -40,6 +41,8 @@ export type OrganisationRow = {
   undelivered: number;
   /** A mock submission loaded from Settings, not a real client. */
   sample: boolean;
+  /** Which company the assessment belongs to. */
+  companyId: string;
   reportState: ReportState;
   createdAt: string;
   submittedAt: string | null;
@@ -80,14 +83,30 @@ async function ownCompany(): Promise<(a: Assessment) => boolean> {
   return (a) => (a.companyId || "default") === company;
 }
 
+/**
+ * One assessment, if it belongs to the company the person is working in.
+ *
+ * Every dashboard route and page that takes an assessment reference goes
+ * through this, because a reference is not a permission: knowing another
+ * firm's code must not be enough to read its client's report, edit it, or send
+ * it. Anything outside the person's company answers exactly as if it did not
+ * exist, so the codes of other firms cannot be probed for either.
+ */
+export async function ownedAssessment(code: string): Promise<Assessment | undefined> {
+  const [assessment, mine] = await Promise.all([getAssessment(code), ownCompany()]);
+  return assessment && mine(assessment) ? assessment : undefined;
+}
+
 export async function visibleAssessments(): Promise<Assessment[]> {
-  const [assessments, hidden, mine] = await Promise.all([
+  const [assessments, live, mine] = await Promise.all([
     listAssessments(),
     samplesHidden(),
     ownCompany(),
   ]);
   const ours = assessments.filter(mine);
-  return hidden ? ours.filter((a) => !a.sample) : ours;
+  // Live is real clients only. Demo is the samples only, so nothing a client
+  // actually told us is on screen while the platform is being shown off.
+  return live ? ours.filter((a) => !a.sample) : ours.filter((a) => a.sample);
 }
 
 /** The stakeholder answers that go with a given set of assessments. */
@@ -112,6 +131,7 @@ function rowFor(a: Assessment): OrganisationRow {
     responded: a.shares.filter((s) => s.respondedAt).length,
     undelivered: a.shares.filter(isUndelivered).length,
     sample: a.sample === true,
+    companyId: a.companyId || "default",
     reportState: reportState(a),
     createdAt: a.createdAt,
     submittedAt: a.submittedAt,

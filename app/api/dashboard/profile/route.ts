@@ -1,3 +1,4 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { saveProfile, type ProfileUpdate } from "@/lib/rmi/settings";
@@ -173,18 +174,13 @@ function parse(body: unknown): { update: ProfileUpdate } | { error: string } {
     }
   }
 
-  if ("samplesHidden" in body) {
-    if (typeof body.samplesHidden !== "boolean") {
-      return { error: "samplesHidden has to be true or false." };
-    }
-    update.samplesHidden = body.samplesHidden;
-  }
-
   if (Object.keys(update).length === 0) return { error: "There was nothing to change." };
   return { update };
 }
 
 export async function PUT(request: Request) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });

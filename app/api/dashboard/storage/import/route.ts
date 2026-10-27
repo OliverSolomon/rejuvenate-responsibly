@@ -1,3 +1,4 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import { importLegacy, storageBackend } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
@@ -11,6 +12,8 @@ export const dynamic = "force-dynamic";
  * more than once.
  */
 export async function POST() {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });

@@ -1,3 +1,4 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { companyRows, slugValid, slugify } from "@/lib/rmi/companies";
@@ -31,6 +32,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const scope = await currentScope();
   if (!scope || !canConfigureInstallation(scope)) return denied();
 

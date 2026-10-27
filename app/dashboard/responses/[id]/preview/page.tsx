@@ -1,3 +1,4 @@
+import { ownedAssessment } from "@/lib/rmi/dashboard";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -5,7 +6,7 @@ import { ReportPreview } from "@/components/dashboard/report-preview";
 import type { OutstandingParty } from "@/components/dashboard/send-report";
 import { composeReport } from "@/lib/rmi/compose";
 import { pageMeta } from "@/lib/seo";
-import { getAssessment, isUndelivered, normaliseCode } from "@/lib/rmi/store";
+import { isUndelivered, normaliseCode } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
 
 export const metadata: Metadata = pageMeta({
@@ -22,7 +23,7 @@ export default async function ReportPreviewPage({
 }: PageProps<"/dashboard/responses/[id]/preview">) {
   const { id } = await params;
   const [assessment, user] = await Promise.all([
-    getAssessment(normaliseCode(id)),
+    ownedAssessment(normaliseCode(id)),
     getDashboardUser(),
   ]);
   if (!assessment || !user) notFound();

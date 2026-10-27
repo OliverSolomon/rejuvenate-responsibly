@@ -3,6 +3,8 @@ import { pageMeta } from "@/lib/seo";
 import Link from "next/link";
 import { organisationRows } from "@/lib/rmi/dashboard";
 import { Card } from "@/components/ui/card";
+import { currentScope } from "@/lib/rmi/scope";
+import { listCompanies } from "@/lib/rmi/store";
 import {
   PaymentBadge,
   ReportBadge,
@@ -23,7 +25,14 @@ export const metadata: Metadata = pageMeta({
 export const dynamic = "force-dynamic";
 
 export default async function ResponsesPage() {
+  const scope = await currentScope();
   const rows = await organisationRows();
+  // With every company in view each row says whose it is. Which companies to
+  // show is chosen from the account menu, not on the page.
+  const names =
+    scope?.companyId === null
+      ? new Map((await listCompanies().catch(() => [])).map((c) => [c.id, c.name]))
+      : null;
   // Newest work first. Someone opening this page is looking for what just came in.
   const sorted = [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
@@ -67,6 +76,7 @@ export default async function ResponsesPage() {
                 <tr className="border-b border-forest-900/10 text-left">
                   {[
                     "Organisation",
+                    ...(names ? ["Company"] : []),
                     "Sector",
                     "Started",
                     "Status",
@@ -111,6 +121,11 @@ export default async function ResponsesPage() {
                         </span>
                       )}
                     </td>
+                    {names && (
+                      <td className="px-4 py-3.5 text-forest-900/70">
+                        {names.get(r.companyId) ?? r.companyId}
+                      </td>
+                    )}
                     <td className="px-4 py-3.5 text-forest-900/70">{r.sector || "--"}</td>
                     <td className="px-4 py-3.5 whitespace-nowrap text-forest-900/70">
                       {formatDate(r.createdAt)}
@@ -152,6 +167,7 @@ export default async function ResponsesPage() {
                   {r.organisation}
                 </Link>
                 <p className="mt-1 text-[0.75rem] text-forest-900/45">
+                  {names ? `${names.get(r.companyId) ?? r.companyId} · ` : ""}
                   {r.id} · {r.sector || "Sector not given"} · {formatDate(r.createdAt)}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resourceStates, sharingFor } from "./settings";
+import { isSampleCompany, resourceStates, sharingFor } from "./settings";
 import { listAssessments, listCompanies, type Company, type SharedKind } from "./store";
 import { listTeam, teamConfigured } from "./team";
 
@@ -21,6 +21,8 @@ export type CompanyRow = Company & {
   sharing: Record<SharedKind, boolean>;
   /** True for each thing the company can actually use right now. */
   ready: Record<SharedKind, boolean>;
+  /** An invented company kept for demonstrating. */
+  sample: boolean;
 };
 
 /** A slug from a name: lowercase, words joined by hyphens. */
@@ -51,9 +53,10 @@ export async function companyRows(): Promise<CompanyRow[]> {
   return Promise.all(
     companies.map(async (company): Promise<CompanyRow> => {
       const theirs = assessments.filter((a) => (a.companyId || "default") === company.id);
-      const [sharing, states] = await Promise.all([
+      const [sharing, states, sample] = await Promise.all([
         sharingFor(company.id),
         resourceStates(company.id),
+        isSampleCompany(company.id),
       ]);
       return {
         ...company,
@@ -61,6 +64,7 @@ export async function companyRows(): Promise<CompanyRow[]> {
         assessments: theirs.length,
         submitted: theirs.filter((a) => a.status === "submitted").length,
         sharing,
+        sample,
         ready: Object.fromEntries(states.map((s) => [s.kind, s.ready])) as Record<
           SharedKind,
           boolean

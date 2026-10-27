@@ -458,9 +458,27 @@ function paymentFor(c: Case, id: string, at: string): Payment {
   };
 }
 
-export function sampleId(n: number): string {
+export function sampleId(n: number, tag = ""): string {
   // Real codes never contain 0 or 1, so a sample id can never collide with one.
-  return `RMI-SMP${String(n).padStart(3, "0")}`;
+  return `RMI-SMP${tag}${String(n).padStart(3, "0")}`;
+}
+
+/**
+ * Three letters that tell one company's samples from another's. Every company
+ * can hold its own set, and an id or a token is unique across all of them, so
+ * the same case in two companies needs two different names. The default
+ * company has none, which keeps the ids it has always had.
+ */
+function companyTag(companyId: string): string {
+  if (companyId === "default") return "";
+  let h = 0;
+  for (const ch of companyId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  let tag = "";
+  for (let i = 0; i < 3; i += 1) {
+    tag += "ABCDEFGHJKLMNPQRSTUVWXYZ"[h % 24];
+    h = Math.floor(h / 24);
+  }
+  return tag;
 }
 
 export type SampleCase = { id: string; title: string; covers: string };
@@ -471,10 +489,17 @@ export const SAMPLE_CASES: SampleCase[] = cases.map((c, i) => ({
   covers: c.covers,
 }));
 
+/**
+ * The sample set, shared out between companies.
+ *
+ * With more than one company the cases are dealt round the table, so each has
+ * a different handful rather than every firm showing the same sixteen
+ * organisations, which would look as invented as it is.
+ */
 export function buildSamples(
   now: Date = new Date(),
-  /** Whose dashboard loaded them, so they appear only there. */
-  companyId = "default",
+  /** Whose dashboards they appear on. */
+  companyIds: string[] = ["default"],
 ): {
   assessments: Assessment[];
   responses: StakeholderResponse[];
@@ -484,17 +509,19 @@ export function buildSamples(
 
   cases.forEach((c, index) => {
     const n = index + 1;
-    const id = sampleId(n);
+    const companyId = companyIds[index % companyIds.length];
+    const tag = companyTag(companyId);
+    const id = sampleId(n, tag);
     const created = new Date(now.getTime() - c.daysAgo * DAY);
     const submitted = c.status === "submitted" ? new Date(created.getTime() + 2 * DAY) : null;
     const invitedAt = submitted ? new Date(submitted.getTime() + DAY) : null;
 
     const shares: Share[] = c.invited.map((p, k) => ({
-      id: sampleUuid(`share-${n}-${k + 1}`),
+      id: sampleUuid(`share-${tag}${n}-${k + 1}`),
       name: p.name,
       email: p.email,
       relationship: p.relationship,
-      token: `sample-share-token-${n}-${k + 1}`,
+      token: `sample-share-token-${tag}${n}-${k + 1}`,
       invitedAt: (invitedAt ?? created).toISOString(),
       respondedAt:
         k < c.responses.length
@@ -522,7 +549,7 @@ export function buildSamples(
     const record: Assessment = {
       id,
       companyId,
-      token: `sample-token-${n}`,
+      token: `sample-token-${tag}${n}`,
       status: c.status,
       profile: c.profile,
       answers: c.answers,
@@ -539,7 +566,7 @@ export function buildSamples(
     const answered: StakeholderResponse[] = c.responses.map((rates, k) => {
       const ans = answersFor("stakeholder", rates, 100 + n * 10 + k);
       return {
-        id: sampleUuid(`response-${n}-${k + 1}`),
+        id: sampleUuid(`response-${tag}${n}-${k + 1}`),
         assessmentId: id,
         shareToken: shares[k].token,
         name: shares[k].name,

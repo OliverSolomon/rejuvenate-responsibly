@@ -1,6 +1,7 @@
+import { ownedAssessment } from "@/lib/rmi/dashboard";
 import { NextResponse } from "next/server";
 import { PDF_LIMIT, putFile } from "@/lib/rmi/files";
-import { getAssessment, normaliseCode, setReportPdf } from "@/lib/rmi/store";
+import { normaliseCode, setReportPdf } from "@/lib/rmi/store";
 import { getDashboardUser } from "@/utils/supabase/server";
 
 export const runtime = "nodejs";
@@ -26,7 +27,7 @@ export async function PUT(
 
   const { id } = await params;
   const code = normaliseCode(id);
-  const assessment = await getAssessment(code);
+  const assessment = await ownedAssessment(code);
   if (!assessment) {
     return NextResponse.json({ error: "No assessment with that reference." }, { status: 404 });
   }

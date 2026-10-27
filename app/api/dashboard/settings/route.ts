@@ -1,3 +1,4 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import {
   SharedKeysError,
@@ -126,6 +127,8 @@ function parse(body: unknown): { update: SettingsUpdate } | { error: string } {
  * reachable on its own, so this checks the admin list again.
  */
 export async function PUT(request: Request) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const scope = await currentScope();
   if (!scope) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });

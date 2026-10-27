@@ -1,3 +1,4 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import {
   contentTypeFor,
@@ -71,6 +72,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });
@@ -161,6 +164,8 @@ export async function POST(request: Request) {
 
 /** Remove the logo or the stamp. */
 export async function DELETE(request: Request) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });

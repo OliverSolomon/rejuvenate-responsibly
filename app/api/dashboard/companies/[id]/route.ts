@@ -1,7 +1,8 @@
+import { memberBlocked } from "@/lib/rmi/scope";
 import { NextResponse } from "next/server";
 import { slugValid, slugify } from "@/lib/rmi/companies";
 import { canConfigureInstallation, currentScope } from "@/lib/rmi/scope";
-import { saveSharing } from "@/lib/rmi/settings";
+import { saveSampleFlag, saveSharing } from "@/lib/rmi/settings";
 import { SHARED_KINDS, companyById, companyBySlug, updateCompany, type SharedKind } from "@/lib/rmi/store";
 
 export const runtime = "nodejs";
@@ -18,6 +19,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const scope = await currentScope();
   if (!scope || !canConfigureInstallation(scope)) {
     return NextResponse.json(
@@ -104,12 +107,21 @@ export async function PATCH(
     }
   }
 
-  if (Object.keys(patch).length === 0 && !sharing) {
+  let sample: boolean | undefined;
+  if (body.sample !== undefined) {
+    if (typeof body.sample !== "boolean") {
+      return NextResponse.json({ error: "sample has to be true or false." }, { status: 400 });
+    }
+    sample = body.sample;
+  }
+
+  if (Object.keys(patch).length === 0 && !sharing && sample === undefined) {
     return NextResponse.json({ error: "There was nothing to change." }, { status: 400 });
   }
 
   try {
     if (sharing) await saveSharing(id, sharing, scope.user.email);
+    if (sample !== undefined) await saveSampleFlag(id, sample, scope.user.email);
     const updated =
       Object.keys(patch).length === 0 ? company : await updateCompany(id, patch);
     if (!updated) {

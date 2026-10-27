@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { visibleAssessments } from "./dashboard";
 import { creditsOut } from "./openrouter";
-import { currentScope, settingsCompany, type Scope } from "./scope";
+import { currentScope, settingsCompany, viewMode, type Scope } from "./scope";
 import { openRouterConfig, resourceStates } from "./settings";
 import { daysUntilExpiry, listCompanies, type Assessment, type SharedKind } from "./store";
 import { recordVisit } from "./team";
@@ -28,6 +28,8 @@ export type ActivityEvent = {
   detail?: string;
   href?: string;
   tone: ActivityTone;
+  /** The company the work belongs to, so an all-companies view can say whose it is. */
+  companyId?: string;
 };
 
 export type AttentionItem = {
@@ -52,6 +54,8 @@ export type Feed = {
   attention: AttentionItem[];
   signedInAt: string | null;
   catchupFrom: string | null;
+  /** When the feed was read, so times can be shown relative to it. */
+  readAt: number;
 };
 
 const WINDOW_DAYS = 30;
@@ -313,7 +317,9 @@ export const getFeed = cache(async (): Promise<Feed | null> => {
   const now = Date.now();
   const since = now - WINDOW_DAYS * 86_400_000;
   const events = assessments
-    .flatMap((a) => eventsFor(a, since))
+    .flatMap((a) =>
+      eventsFor(a, since).map((e) => ({ ...e, companyId: a.companyId || "default" })),
+    )
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .slice(0, MAX_EVENTS);
 
@@ -329,7 +335,13 @@ export const getFeed = cache(async (): Promise<Feed | null> => {
           return t > from && (signedIn === null || t <= signedIn);
         });
 
-  const attention = [...(await setupItems(scope).catch(() => [])), ...workItems(assessments, now)];
+  // Demo has no setup banners: a missing key is a fact about the live platform,
+  // not something to show somebody who is being walked through it.
+  const demo = (await viewMode()) === "demo";
+  const attention = [
+    ...(demo ? [] : await setupItems(scope).catch(() => [])),
+    ...workItems(assessments, now),
+  ];
 
   return {
     events,
@@ -338,5 +350,6 @@ export const getFeed = cache(async (): Promise<Feed | null> => {
     attention,
     signedInAt: scope.user.signedInAt,
     catchupFrom: visit.catchupSince,
+    readAt: now,
   };
 });

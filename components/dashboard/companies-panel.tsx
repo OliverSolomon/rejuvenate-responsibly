@@ -228,6 +228,7 @@ export function CompaniesPanel({
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-forest-900">{company.name}</span>
                         {company.isDefault && <Badge tone="strong">Yours</Badge>}
+                        {company.sample && <Badge tone="quiet">Sample</Badge>}
                         {!company.active && <Badge tone="neutral">Closed</Badge>}
                       </div>
                     )}
@@ -285,6 +286,14 @@ export function CompaniesPanel({
                         }}
                       >
                         Rename
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() => patch(company.id, { sample: !company.sample })}
+                      >
+                        {company.sample ? "Unmark sample" : "Mark as sample"}
                       </Button>
                       {!company.isDefault && (
                         <Button

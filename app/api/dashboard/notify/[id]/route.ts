@@ -1,7 +1,8 @@
+import { memberBlocked } from "@/lib/rmi/scope";
+import { ownedAssessment } from "@/lib/rmi/dashboard";
 import { NextResponse } from "next/server";
 import { send } from "@/lib/rmi/mailer";
 import {
-  getAssessment,
   isUndelivered,
   markSharesNotified,
   normaliseCode,
@@ -23,6 +24,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const readOnly = await memberBlocked();
+  if (readOnly) return readOnly;
   const user = await getDashboardUser();
   if (!user) {
     return NextResponse.json({ error: "You are not signed in as an admin." }, { status: 403 });
@@ -51,7 +54,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const assessment = await getAssessment(normaliseCode(id));
+  const assessment = await ownedAssessment(normaliseCode(id));
   if (!assessment) {
     return NextResponse.json({ error: "No assessment with that reference." }, { status: 404 });
   }

@@ -80,8 +80,8 @@ export const listStakeholderResponses: typeof file.listStakeholderResponses = (.
 export const readSettings: typeof file.readSettings = (...a) => impl().readSettings(...a);
 export const changeSettings: typeof file.changeSettings = (...a) => impl().changeSettings(...a);
 export const replaceSamples: typeof file.replaceSamples = (...a) => impl().replaceSamples(...a);
-export const removeSamples: typeof file.removeSamples = () => impl().removeSamples();
-export const countSamples: typeof file.countSamples = () => impl().countSamples();
+export const removeSamples: typeof file.removeSamples = (...a) => impl().removeSamples(...a);
+export const countSamples: typeof file.countSamples = (...a) => impl().countSamples(...a);
 
 /* moving from the file to Supabase */
 

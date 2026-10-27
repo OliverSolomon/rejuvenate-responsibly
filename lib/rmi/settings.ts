@@ -17,7 +17,7 @@ import {
 } from "./regions";
 import { pricing, type Tier } from "./pricing";
 import { paletteCss, paletteFrom, type PaletteSeeds } from "./palette";
-import { currentScope, settingsCompany, DEFAULT_COMPANY } from "./scope";
+import { currentScope, settingsCompany, viewMode, DEFAULT_COMPANY } from "./scope";
 import { site } from "@/lib/site";
 import {
   decryptSecret,
@@ -808,9 +808,28 @@ export async function tiers(): Promise<Tier[]> {
 /* sample data                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** Whether sample rows are being kept out of the views. */
+/**
+ * Whether sample rows are being kept out of the views. They are on the live
+ * platform and they are the only thing shown in demo, so this is the mode and
+ * nothing else.
+ */
 export async function samplesHidden(): Promise<boolean> {
-  return (await scopedSettings()).samples?.hidden === true;
+  return (await viewMode()) === "live";
+}
+
+/** Whether a company is one of the invented ones kept for demonstrating. */
+export async function isSampleCompany(companyId: string): Promise<boolean> {
+  return (await safeSettings(companyId)).sample === true;
+}
+
+/** Mark a company as a sample, or take the mark off. */
+export async function saveSampleFlag(companyId: string, sample: boolean, by: string): Promise<void> {
+  await changeSettings((current): StoredSettings => {
+    const next: StoredSettings = { ...current, updatedAt: new Date().toISOString(), updatedBy: by };
+    if (sample) next.sample = true;
+    else delete next.sample;
+    return next;
+  }, companyId);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -828,7 +847,6 @@ export type ProfileUpdate = {
   };
   socials?: { label: string; href: string }[] | null;
   tiers?: StoredSettings["tiers"];
-  samplesHidden?: boolean;
   /** null goes back to the house colours. */
   palette?: PaletteSeeds | null;
 };
@@ -888,10 +906,6 @@ export async function saveProfile(update: ProfileUpdate, by: string): Promise<vo
 
     if (update.tiers) {
       next.tiers = { ...next.tiers, ...update.tiers };
-    }
-
-    if (update.samplesHidden !== undefined) {
-      next.samples = { ...next.samples, hidden: update.samplesHidden };
     }
 
     if (update.palette !== undefined) {
