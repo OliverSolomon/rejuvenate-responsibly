@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The editor's WebAssembly shim, copied out of node_modules at build time.
+    // Vendored code, not ours to lint.
+    "public/wordcraft/**",
   ]),
 ]);
 

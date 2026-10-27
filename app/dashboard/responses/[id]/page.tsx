@@ -9,6 +9,7 @@ import { DeliveryNotice } from "@/components/dashboard/delivery-notice";
 import { SendReport } from "@/components/dashboard/send-report";
 import { Badge } from "@/components/ui/badge";
 import { renderMarkdown } from "@/lib/rmi/markdown";
+import { daysUntilExpiry, reportExpired, reportExpiry } from "@/lib/rmi/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Stat } from "@/components/dashboard/stat";
 import { PerceptionChart } from "@/components/dashboard/charts";
@@ -38,6 +39,9 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
 
   const { row, assessment, parties, selfScore, perception } = detail;
   const report = assessment.report;
+  const expiresAt = reportExpiry(report);
+  const expired = reportExpired(report);
+  const daysLeft = daysUntilExpiry(report);
   const everyoneIn = row.invited > 0 && row.responded === row.invited;
 
   const failed = parties.filter((p) => p.undelivered);
@@ -311,7 +315,23 @@ export default async function OrganisationPage({ params }: PageProps<"/dashboard
                 {report.sentAt
                   ? ` · sent ${formatDate(report.sentAt)}${report.sentOutstanding ? ` with ${report.sentOutstanding} ${report.sentOutstanding === 1 ? "answer" : "answers"} outstanding` : ""}`
                   : ""}
+                {report.pdfPath ? " · PDF issued" : ""}
               </p>
+
+              {/* Validity. One year from the day it was sent. */}
+              {expiresAt && (
+                <p
+                  className={`mt-1.5 text-[0.75rem] ${
+                    expired ? "text-clay-500" : "text-forest-900/45"
+                  }`}
+                >
+                  {expired
+                    ? `Expired ${formatDate(expiresAt.toISOString())}. The client can still read and download it, and both say so.`
+                    : `Valid until ${formatDate(expiresAt.toISOString())}${
+                        daysLeft !== null ? `, ${daysLeft} ${daysLeft === 1 ? "day" : "days"} left` : ""
+                      }.`}
+                </p>
+              )}
               <div
                 className="report-body mt-5 max-w-[72ch]"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(report.markdown) }}

@@ -12,6 +12,7 @@ import type {
   PaymentStatus,
   Profile,
   Report,
+  ReportTemplate,
   ScoreSummary,
   Share,
   StakeholderResponse,
@@ -103,6 +104,10 @@ type ReportRow = {
   sent_at: string | null;
   sent_by: string | null;
   sent_outstanding: number | null;
+  pdf_path: string | null;
+  pdf_size: number | null;
+  pdf_at: string | null;
+  template_version: number | null;
 };
 
 type AssessmentRow = {
@@ -128,6 +133,7 @@ type AssessmentRow = {
   updated_at: string;
   submitted_at: string | null;
   sample: boolean;
+  client_logo: string | null;
   rmi_shares?: ShareRow[] | null;
   rmi_reports?: ReportRow | ReportRow[] | null;
 };
@@ -174,6 +180,12 @@ function toReport(r: ReportRow): Report {
     if (r.sent_by) report.sentBy = r.sent_by;
     if (r.sent_outstanding != null) report.sentOutstanding = r.sent_outstanding;
   }
+  if (r.pdf_path) {
+    report.pdfPath = r.pdf_path;
+    if (r.pdf_size != null) report.pdfSize = r.pdf_size;
+    if (r.pdf_at) report.pdfAt = r.pdf_at;
+  }
+  if (r.template_version != null) report.templateVersion = r.template_version;
   return report;
 }
 
@@ -211,6 +223,7 @@ function toAssessment(r: AssessmentRow): Assessment {
     submittedAt: r.submitted_at,
   };
   if (r.sample) a.sample = true;
+  if (r.client_logo) a.clientLogo = r.client_logo;
   return a;
 }
 
@@ -239,6 +252,7 @@ function assessmentRow(a: Assessment) {
     updated_at: a.updatedAt,
     submitted_at: a.submittedAt,
     sample: Boolean(a.sample),
+    client_logo: a.clientLogo ?? null,
   };
 }
 
@@ -279,6 +293,10 @@ function reportRow(assessmentId: string, r: Report) {
     sent_at: r.sentAt ?? null,
     sent_by: r.sentBy ?? null,
     sent_outstanding: r.sentOutstanding ?? null,
+    pdf_path: r.pdfPath ?? null,
+    pdf_size: r.pdfSize ?? null,
+    pdf_at: r.pdfAt ?? null,
+    template_version: r.templateVersion ?? null,
   };
 }
 
@@ -485,6 +503,151 @@ export async function markReportSent(
   if (error) fail("mark report sent", error);
   if (!data || data.length === 0) return undefined;
   return getAssessment(id);
+}
+
+/**
+ * Record the PDF that was issued, and which template built it.
+ *
+ * Kept separate from markReportSent because the file is uploaded by the browser
+ * that rendered it, which is a different request from the one that sends the
+ * email.
+ */
+export async function setReportPdf(
+  id: string,
+  pdf: { path: string; size: number; templateVersion?: number },
+): Promise<Assessment | undefined> {
+  const { data, error } = await db()
+    .from("rmi_reports")
+    .update({
+      pdf_path: pdf.path,
+      pdf_size: pdf.size,
+      pdf_at: new Date().toISOString(),
+      template_version: pdf.templateVersion ?? null,
+    })
+    .eq("assessment_id", id)
+    .select("assessment_id");
+  if (error) fail("save report pdf", error);
+  if (!data || data.length === 0) return undefined;
+  return getAssessment(id);
+}
+
+/** The logo an organisation added to its own assessment. */
+export async function setClientLogo(
+  id: string,
+  token: string,
+  logoPath: string | null,
+): Promise<Assessment | undefined> {
+  const { data, error } = await db()
+    .from("rmi_assessments")
+    .update({ client_logo: logoPath, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("token", token)
+    .select("id");
+  if (error) fail("save client logo", error);
+  if (!data || data.length === 0) return undefined;
+  return getAssessment(id);
+}
+
+/* -------------------------------------------------------------------------- */
+/* the report template                                                        */
+/* -------------------------------------------------------------------------- */
+
+type TemplateRow = {
+  draft_html: string | null;
+  draft_doc: string | null;
+  draft_updated_at: string | null;
+  draft_updated_by: string | null;
+  published_html: string | null;
+  published_doc: string | null;
+  published_at: string | null;
+  published_by: string | null;
+  version: number;
+};
+
+function toTemplate(r: TemplateRow | null): ReportTemplate {
+  const template: ReportTemplate = { version: r?.version ?? 0 };
+  if (r?.draft_html != null && r.draft_updated_at) {
+    template.draft = {
+      html: r.draft_html,
+      at: r.draft_updated_at,
+      ...(r.draft_doc ? { doc: r.draft_doc } : {}),
+      ...(r.draft_updated_by ? { by: r.draft_updated_by } : {}),
+    };
+  }
+  if (r?.published_html != null && r.published_at) {
+    template.published = {
+      html: r.published_html,
+      at: r.published_at,
+      ...(r.published_doc ? { doc: r.published_doc } : {}),
+      ...(r.published_by ? { by: r.published_by } : {}),
+    };
+  }
+  return template;
+}
+
+export async function readTemplate(): Promise<ReportTemplate> {
+  const { data, error } = await db()
+    .from("rmi_report_templates")
+    .select("*")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) fail("read report template", error);
+  return toTemplate((data as TemplateRow | null) ?? null);
+}
+
+export async function saveTemplateDraft(
+  html: string,
+  doc: string | null,
+  by: string,
+): Promise<ReportTemplate> {
+  const { error } = await db()
+    .from("rmi_report_templates")
+    .upsert(
+      {
+        id: "default",
+        draft_html: html,
+        draft_doc: doc,
+        draft_updated_at: new Date().toISOString(),
+        draft_updated_by: by,
+      },
+      { onConflict: "id" },
+    );
+  if (error) fail("save report template draft", error);
+  return readTemplate();
+}
+
+/** Move the draft into place as the live template and bump the version. */
+export async function publishTemplate(by: string): Promise<ReportTemplate | undefined> {
+  const current = await readTemplate();
+  if (!current.draft) return undefined;
+
+  const { error } = await db()
+    .from("rmi_report_templates")
+    .update({
+      published_html: current.draft.html,
+      published_doc: current.draft.doc ?? null,
+      published_at: new Date().toISOString(),
+      published_by: by,
+      version: current.version + 1,
+    })
+    .eq("id", "default");
+  if (error) fail("publish report template", error);
+  return readTemplate();
+}
+
+/** Throw the draft away. What is published keeps serving reports. */
+export async function discardTemplateDraft(): Promise<ReportTemplate> {
+  const { error } = await db()
+    .from("rmi_report_templates")
+    .update({
+      draft_html: null,
+      draft_doc: null,
+      draft_updated_at: null,
+      draft_updated_by: null,
+    })
+    .eq("id", "default");
+  if (error) fail("discard report template draft", error);
+  return readTemplate();
 }
 
 /* -------------------------------------------------------------------------- */

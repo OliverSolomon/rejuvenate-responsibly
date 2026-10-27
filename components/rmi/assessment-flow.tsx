@@ -7,6 +7,7 @@ import { SectionRail } from "./section-rail";
 import { ResultPanel } from "./result-panel";
 import { useAssessment } from "./use-assessment";
 import { ReferenceCard } from "./reference-card";
+import { LogoField } from "./logo-field";
 import { Button } from "@/components/ui/button";
 import { SECTIONS, SECTION_ORDER, type SectionId } from "@/lib/rmi/questions";
 import { scoreAssessment } from "@/lib/rmi/scoring";
@@ -355,6 +356,10 @@ export function AssessmentFlow({
                     ))}
                   </select>
                 </label>
+                {/* Only the organisation being assessed has a logo on the report. */}
+                {audience === "client" && (
+                  <LogoField session={a.session} ensureSession={a.ensureSession} />
+                )}
               </div>
             </section>
 

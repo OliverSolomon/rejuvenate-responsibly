@@ -1,7 +1,7 @@
 import "server-only";
 
 import { EMAIL_KIND_IDS, type EmailKind } from "./email-kinds";
-import { changeSettings, readSettings, type StoredSettings } from "./store";
+import { changeSettings, readSettings, type BrandAsset, type StoredSettings } from "./store";
 import {
   decryptSecret,
   encryptionAvailable,
@@ -279,4 +279,54 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
     next.updatedBy = by;
     return next;
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* the logo and the stamp                                                     */
+/* -------------------------------------------------------------------------- */
+
+export type BrandKind = "logo" | "stamp";
+
+export async function brandAssets(): Promise<{ logo?: BrandAsset; stamp?: BrandAsset }> {
+  const stored = await readSettings();
+  return { logo: stored.brand?.logo, stamp: stored.brand?.stamp };
+}
+
+/** Record an uploaded logo or stamp. Returns what the previous one was, to delete. */
+export async function saveBrandAsset(
+  kind: BrandKind,
+  asset: BrandAsset,
+  by: string,
+): Promise<BrandAsset | undefined> {
+  let previous: BrandAsset | undefined;
+  await changeSettings((current): StoredSettings => {
+    previous = current.brand?.[kind];
+    return {
+      ...current,
+      brand: { ...current.brand, [kind]: asset },
+      updatedAt: new Date().toISOString(),
+      updatedBy: by,
+    };
+  });
+  return previous;
+}
+
+/** Remove a logo or stamp. Returns what was there, to delete from file storage. */
+export async function clearBrandAsset(
+  kind: BrandKind,
+  by: string,
+): Promise<BrandAsset | undefined> {
+  let previous: BrandAsset | undefined;
+  await changeSettings((current): StoredSettings => {
+    previous = current.brand?.[kind];
+    const brand = { ...current.brand };
+    delete brand[kind];
+    return {
+      ...current,
+      brand,
+      updatedAt: new Date().toISOString(),
+      updatedBy: by,
+    };
+  });
+  return previous;
 }

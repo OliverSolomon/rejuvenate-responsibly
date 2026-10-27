@@ -15,8 +15,22 @@
 import type { EmailKind } from "./email-kinds";
 import { emailAllowed } from "./settings";
 
+/** A file to travel with the message. Mailtrap takes the content base64 encoded. */
+export type Attachment = {
+  filename: string;
+  /** Base64, without a data URL prefix. */
+  content: string;
+  type: string;
+};
+
 /** `kind` decides which dashboard switch governs this message. */
-export type Mail = { kind: EmailKind; to: string; subject: string; text: string };
+export type Mail = {
+  kind: EmailKind;
+  to: string;
+  subject: string;
+  text: string;
+  attachments?: Attachment[];
+};
 export type Delivery = { ok: boolean; queued: boolean; error?: string };
 
 const SENDING = "https://send.api.mailtrap.io/api/send";
@@ -70,6 +84,16 @@ export async function send(mail: Mail): Promise<Delivery> {
         subject: mail.subject,
         text: mail.text,
         category: "Rate My Impact",
+        ...(mail.attachments?.length
+          ? {
+              attachments: mail.attachments.map((a) => ({
+                filename: a.filename,
+                content: a.content,
+                type: a.type,
+                disposition: "attachment",
+              })),
+            }
+          : {}),
       }),
     });
 

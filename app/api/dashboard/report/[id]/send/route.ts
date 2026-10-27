@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { reportReadyEmail, send } from "@/lib/rmi/mailer";
+import { reportReadyEmail, send, type Attachment } from "@/lib/rmi/mailer";
+import { getFile } from "@/lib/rmi/files";
 import { getAssessment, markReportSent, normaliseCode } from "@/lib/rmi/store";
 import { siteUrl } from "@/lib/rmi/urls";
 import { getDashboardUser } from "@/utils/supabase/server";
@@ -14,6 +15,11 @@ export const runtime = "nodejs";
  * taken from the browser, and a send with anyone outstanding is refused unless
  * the admin has explicitly acknowledged it. The modal asks for that, and this is
  * the check that holds if something calls the route directly.
+ *
+ * The PDF the admin approved on the preview page is attached when one has been
+ * stored. Without it the email still goes, carrying the link alone, because a
+ * missing attachment is a worse reason to withhold a finished report than it is
+ * to send a plainer email.
  */
 export async function POST(
   request: Request,
@@ -55,9 +61,26 @@ export async function POST(
     );
   }
 
+  // The document approved on the preview page, if it got that far.
+  const attachments: Attachment[] = [];
+  const pdfPath = assessment.report.pdfPath;
+  if (pdfPath) {
+    const stored = await getFile(pdfPath);
+    if (stored) {
+      attachments.push({
+        filename: `${assessment.id}-impact-report.pdf`,
+        content: Buffer.from(stored.bytes).toString("base64"),
+        type: "application/pdf",
+      });
+    } else {
+      console.warn("[rmi:report] the stored PDF went missing", { id: assessment.id, pdfPath });
+    }
+  }
+
   const delivery = await send({
     kind: "report",
     to: assessment.profile.email,
+    ...(attachments.length ? { attachments } : {}),
     ...reportReadyEmail({
       organisation: assessment.profile.organisation,
       code: assessment.id,
@@ -92,5 +115,6 @@ export async function POST(
     sent: true,
     to: assessment.profile.email,
     outstanding,
+    attached: attachments.length > 0,
   });
 }

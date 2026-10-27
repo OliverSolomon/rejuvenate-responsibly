@@ -24,6 +24,7 @@ const REPORT: Record<ReportState, { label: string; tone: BadgeTone }> = {
   draft: { label: "Draft report", tone: "pending" },
   issued: { label: "Report issued", tone: "strong" },
   sent: { label: "Report sent", tone: "strong" },
+  expired: { label: "Report expired", tone: "pending" },
 };
 
 export function StatusBadge({ status }: { status: string }) {

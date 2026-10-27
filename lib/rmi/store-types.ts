@@ -91,7 +91,79 @@ export type Report = {
   sentBy?: string;
   /** How many invited stakeholders had not answered when it was sent. */
   sentOutstanding?: number;
+  /**
+   * The PDF as it was issued, in file storage. Kept so the client downloads the
+   * same document months later rather than a fresh render of changed wording.
+   */
+  pdfPath?: string;
+  pdfSize?: number;
+  pdfAt?: string;
+  /** Which published template version it was built from. */
+  templateVersion?: number;
 };
+
+/** An image an admin uploaded for the letterhead: the firm's logo or its stamp. */
+export type BrandAsset = {
+  /** Path in file storage. Carries a version suffix, so replacing one is cache safe. */
+  path: string;
+  /** As measured in the browser at upload, for sizing it on the page. */
+  width?: number;
+  height?: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+};
+
+/** One saved state of the report template: what is being worked on, or what is live. */
+export type TemplateVersion = {
+  /** The letterhead and footer as HTML, with placeholders left in place. */
+  html: string;
+  /**
+   * The editor's own document in file storage, so reopening a draft is lossless
+   * instead of a round trip through HTML.
+   */
+  doc?: string;
+  at: string;
+  by?: string;
+};
+
+/**
+ * The house report template. Reports are built from `published`; `draft` is
+ * what an admin is working on and never reaches a client. Both absent means
+ * nothing has been saved and the built-in template is used.
+ */
+export type ReportTemplate = {
+  draft?: TemplateVersion;
+  published?: TemplateVersion;
+  /** Rises on every publish. Recorded on a report so its origin is traceable. */
+  version: number;
+};
+
+/** One year, which is how long an issued report stays valid. */
+export const REPORT_VALID_DAYS = 365;
+
+/**
+ * When a report stops being current. Measured from the day an admin sent it,
+ * because that is the date a client would call it issued, and it is not moved
+ * by drafts or rebuilds. A report that was never sent has no expiry yet.
+ */
+export function reportExpiry(report: Report | null | undefined): Date | null {
+  if (!report?.sentAt) return null;
+  const expires = new Date(report.sentAt);
+  expires.setDate(expires.getDate() + REPORT_VALID_DAYS);
+  return expires;
+}
+
+export function reportExpired(report: Report | null | undefined, now = new Date()): boolean {
+  const expires = reportExpiry(report);
+  return Boolean(expires && now >= expires);
+}
+
+/** Whole days until a sent report expires. Negative once it has. */
+export function daysUntilExpiry(report: Report | null | undefined, now = new Date()): number | null {
+  const expires = reportExpiry(report);
+  if (!expires) return null;
+  return Math.ceil((expires.getTime() - now.getTime()) / 86_400_000);
+}
 
 /**
  * Settings an admin can change from the dashboard. Secrets are stored
@@ -106,6 +178,11 @@ export type StoredSettings = {
   emailKinds?: Partial<Record<EmailKind, boolean>>;
   /** Where contact form enquiries are delivered. */
   contactInbox?: string;
+  /** The logo and stamp the report template draws on. */
+  brand?: {
+    logo?: BrandAsset;
+    stamp?: BrandAsset;
+  };
   pesapal?: {
     consumerKey?: string;
     consumerSecret?: string;
@@ -136,6 +213,11 @@ export type Assessment = {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
+  /**
+   * Path of the logo the organisation added while filling in the assessment,
+   * in file storage. Absent when they did not add one, which is normal.
+   */
+  clientLogo?: string;
   /** Loaded from the dashboard's sample data panel. Safe to remove in one go. */
   sample?: true;
 };

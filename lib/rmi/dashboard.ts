@@ -7,6 +7,7 @@ import {
   listAllStakeholderResponses,
   listAssessments,
   listStakeholderResponses,
+  reportExpired,
   type Assessment,
   type StakeholderResponse,
 } from "./store";
@@ -19,7 +20,7 @@ import {
  * calls in here change: the shapes below are what the views are built against.
  */
 
-export type ReportState = "none" | "draft" | "issued" | "sent";
+export type ReportState = "none" | "draft" | "issued" | "sent" | "expired";
 
 export type OrganisationRow = {
   id: string;
@@ -44,6 +45,9 @@ export type OrganisationRow = {
 
 function reportState(a: Assessment): ReportState {
   if (!a.report) return "none";
+  // A year after it was sent it stops being current, which matters more to
+  // anyone scanning this list than the fact that it went out.
+  if (reportExpired(a.report)) return "expired";
   if (a.report.sentAt) return "sent";
   // A report counts as issued once an admin has been through it and saved. Until
   // then it is what the model wrote, which is a draft however good it reads.

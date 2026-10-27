@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { LogoMark } from "@/components/ui/logo";
 import { Container } from "@/components/ui/section";
-import { renderMarkdown } from "@/lib/rmi/markdown";
-import { site } from "@/lib/site";
 
-type Report = { markdown: string; model: string; generatedAt: string };
+type Report = {
+  markdown: string;
+  model: string;
+  generatedAt: string;
+  sentAt?: string;
+  /** The whole document, letterhead and all, as the client was sent it. */
+  documentHtml: string | null;
+  expired: boolean;
+  expiresAt: string | null;
+  hasPdf: boolean;
+};
+
+const longDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export function ReportView({ id, token }: { id?: string; token?: string }) {
+  const frame = useRef<HTMLIFrameElement>(null);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,17 +92,31 @@ export function ReportView({ id, token }: { id?: string; token?: string }) {
   return (
     <div className="bg-bone-100 pt-28 pb-24 print:bg-white print:pt-0">
       <Container size="default">
-        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 pb-6 print:hidden">
-          <p className="text-[0.8125rem] text-forest-900/50">
-            Generated {new Date(report.generatedAt).toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => window.print()}>
-              Print or save as PDF
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 pb-6 print:hidden">
+          <div>
+            <p className="text-[0.8125rem] text-forest-900/50">
+              {report.sentAt
+                ? `Issued ${longDate(report.sentAt)}`
+                : `Written ${longDate(report.generatedAt)}`}
+              {report.expiresAt && !report.expired ? ` · valid until ${longDate(report.expiresAt)}` : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {report.hasPdf && id && token && (
+              <ButtonLink
+                href={`/api/rmi/report/pdf?id=${encodeURIComponent(id)}&t=${encodeURIComponent(token)}`}
+                variant="ghost"
+                size="sm"
+              >
+                Download the PDF
+              </ButtonLink>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => frame.current?.contentWindow?.print() ?? window.print()}
+            >
+              Print
             </Button>
             <Button variant="ghost" size="sm" onClick={regenerate} disabled={busy}>
               {busy ? "Rebuilding..." : "Rebuild"}
@@ -99,53 +124,41 @@ export function ReportView({ id, token }: { id?: string; token?: string }) {
           </div>
         </div>
 
-        {/* Letterhead */}
-        <article className="mx-auto max-w-3xl rounded-card border border-forest-900/10 bg-bone-50 px-6 py-10 shadow-[0_24px_60px_-40px_rgba(8,23,15,0.4)] sm:px-14 sm:py-14 print:rounded-none print:border-0 print:px-0 print:shadow-none">
-          <header className="flex items-start justify-between gap-6 border-b border-forest-900/12 pb-8">
-            <div className="flex items-center gap-3">
-              <LogoMark className="h-11 w-11" />
-              <span className="flex flex-col leading-[1.05] text-forest-900">
-                <span className="font-display text-[0.9rem] font-semibold uppercase tracking-[0.01em]">
-                  Rejuvenate
-                </span>
-                <span className="font-display text-[0.9rem] font-semibold uppercase tracking-[0.01em]">
-                  Responsibly
-                </span>
-              </span>
+        {report.expired && (
+          <div className="mx-auto mb-6 max-w-4xl rounded-card border border-clay-400/40 bg-clay-400/10 p-5 print:hidden">
+            <p className="display text-[1.0625rem] text-clay-500">This report has expired</p>
+            <p className="mt-2 max-w-[62ch] text-[0.875rem] leading-relaxed text-forest-900/70">
+              It covers the assessment as it stood when it was issued and stopped being current
+              {report.expiresAt ? ` on ${longDate(report.expiresAt)}` : " a year later"}. You can
+              still read it and download it, and the document is marked expired. A new assessment
+              is what gives an up to date position.
+            </p>
+            <div className="mt-4">
+              <ButtonLink href="/rmi" variant="ghost" size="sm">
+                Start a new assessment
+              </ButtonLink>
             </div>
-            <div className="text-right text-[0.75rem] leading-relaxed text-forest-900/50">
-              <p>{site.location}</p>
-              <p>{site.email}</p>
-            </div>
-          </header>
+          </div>
+        )}
 
-          <div
-            className="report-body mt-10"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(report.markdown) }}
+        {/*
+          The document itself, in an iframe. It carries its own letterhead,
+          footer and styling from the template an admin published, so it is
+          kept away from the site's own CSS and what is on screen is what
+          prints and what was attached to the email.
+        */}
+        {report.documentHtml ? (
+          <iframe
+            ref={frame}
+            title="Your impact report"
+            srcDoc={report.documentHtml}
+            className="mx-auto block h-[1400px] w-full max-w-4xl rounded-card border border-forest-900/10 bg-white shadow-[0_24px_60px_-40px_rgba(8,23,15,0.4)] print:h-auto print:rounded-none print:border-0 print:shadow-none"
           />
-
-          {/* Issued by seal */}
-          <footer className="mt-14 flex items-center justify-between gap-6 border-t border-forest-900/12 pt-8">
-            <div className="text-[0.75rem] leading-relaxed text-forest-900/50">
-              <p>Framework: NSE Kenya ESG Disclosure Manual and GRI Standards</p>
-              <p className="mt-1">
-                This report is issued on the basis of self-declared responses and the
-                stakeholder survey. It is not an audit.
-              </p>
-            </div>
-            <div className="grid h-24 w-24 shrink-0 place-items-center rounded-full border-2 border-forest-700 text-center">
-              <div>
-                <p className="text-[0.5rem] uppercase tracking-[0.18em] text-forest-700">
-                  Issued by
-                </p>
-                <LogoMark className="mx-auto mt-1 h-7 w-7" />
-                <p className="mt-1 text-[0.5rem] uppercase tracking-[0.14em] text-forest-700">
-                  Rejuvenate
-                </p>
-              </div>
-            </div>
-          </footer>
-        </article>
+        ) : (
+          <p className="mx-auto max-w-3xl text-[0.9375rem] text-forest-900/60">
+            This report could not be laid out. Please get in touch and we will send it over.
+          </p>
+        )}
       </Container>
     </div>
   );

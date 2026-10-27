@@ -65,6 +65,10 @@ lib/
   rmi/report.ts                drafting prompt and the two-pass generation
   rmi/markdown.ts              renders the generated report
   rmi/dashboard.ts             read models behind the dashboard views
+  rmi/template.ts              the report template, placeholders and merging
+  rmi/compose.ts               builds the document: template plus report
+  rmi/files.ts                 uploads, in Supabase Storage or on disk
+  rmi/pdf-stamp.ts             marks an expired PDF as it is served
 utils/supabase/                browser, server and proxy clients
 supabase/migrations/           the whole database in one script
 proxy.ts                       keeps the dashboard behind a session
@@ -219,13 +223,18 @@ when that happens, only the three functions in `lib/rmi/dashboard.ts` change.
 
 ## Sending the final report
 
-On an organisation's page, **Send report** emails the submitter a link to the
-report. It works whether or not every stakeholder has answered. A confirmation
-modal says the report is final and, when anyone is outstanding, lists them by
-name (marking invitations that never arrived) and requires a tick before it
-sends. The server recomputes who is outstanding and refuses the send without
-that acknowledgement, so the check holds if the route is called directly. The
-email to the submitter says how many answers are missing.
+On an organisation's page, **Preview and send** opens the report as the client
+will receive it, and sending happens from there. The document is laid out in the
+editor, which is also what renders the PDF, so the preview is the document
+rather than a likeness of it. Pressing send exports that PDF, stores it, and
+emails the submitter the link and the attachment together.
+
+It works whether or not every stakeholder has answered. When anyone is
+outstanding the preview page lists them by name, marks invitations that never
+arrived, and requires a tick before it sends. The server recomputes who is
+outstanding and refuses the send without that acknowledgement, so the check
+holds if the route is called directly. The email to the submitter says how many
+answers are missing.
 
 The automatic path only writes a report once everyone has answered, so when
 someone never does there is nothing to send. **Write report now** generates one
@@ -234,6 +243,77 @@ be reviewed, edited and sent. A send records when, by whom and how many answers
 were outstanding, and is shown as "Report sent". If email is not configured
 nothing is recorded as sent. Migration `0003_report_sent.sql` adds the three
 columns it needs, additively.
+
+## How a report looks
+
+Every report is wrapped in a template: the letterhead, the footer and whatever
+standing wording the firm wants on the page. One house template serves all of
+them, with a draft and a published version, so changes can be worked on and
+previewed without touching anything a client can see.
+
+Settings > Report appearance holds the logo and the stamp as uploads. PNG, JPEG
+and WebP only: SVG is a document that can carry script, and these are served
+inline to browsers, so it is left out. Replacing one writes a new path and
+deletes the old file, which keeps a year-long cache from serving yesterday's
+logo.
+
+### The template
+
+`/dashboard/settings/report-template` is the editor. It opens with the draft, or
+what is published, or a built-in starter, and an existing letterhead can be
+opened from a Word, OpenDocument, RTF, HTML, Markdown or text file. A PDF cannot
+be opened for editing, which the page says: convert it first, or rebuild it and
+upload the logo and stamp.
+
+Placeholders mark where things go. `{{report}}` is the only one a template
+cannot be published without, since without it a report would carry no writing.
+The rest are optional: `{{logo}}`, `{{stamp}}`, `{{client_logo}}`,
+`{{organisation}}`, `{{reference}}`, `{{tier}}`, `{{score}}`, `{{issued_date}}`,
+`{{expires_date}}`, `{{expiry_notice}}`, `{{firm_name}}`, `{{firm_email}}` and
+`{{firm_location}}`. A placeholder with nothing behind it renders as nothing, so
+leaving one in never prints braces on a document; a misspelt one is left as
+written, so the mistake is visible in the preview.
+
+Two things about the editor are worth knowing, because both were surprises
+worth designing around. It is a word processor, so it reads HTML into a
+document of paragraphs, tables and runs and writes its own HTML back out: page
+level CSS from an uploaded web page does not survive, and the look is set with
+the editor's own tools. And it puts every line in a paragraph, so `{{report}}`
+arrives as `<p>{{report}}</p>`; the merge replaces the paragraph along with the
+token, rather than nesting headings and tables inside it.
+
+Images are embedded in the merged document as data URLs rather than linked. The
+editor lays out HTML without fetching anything, so a linked logo came out as its
+own alt text in the PDF. Embedding also makes the document self-contained, which
+is what something printed and emailed should be.
+
+### The same document three times
+
+`lib/rmi/compose.ts` builds it once and everything uses that: the preview an
+admin signs off, the page the client reads, and the PDF that is attached. They
+cannot drift apart. The client's page renders it in an iframe, which keeps the
+template's styling away from the site's own and means what is on screen is what
+prints.
+
+### Validity
+
+A report is valid for one year from the day it was sent, not the day it was
+written, so a report that sat in review still arrives with a full year on it.
+
+Nothing changes until the year is up. After it, the client's page carries a
+notice and an offer to start a new assessment, the dashboard shows the report as
+expired, and `{{expiry_notice}}` fills in on the document itself. The PDF still
+downloads: it is stamped as expired on the way out, with a band across the top
+of every page and a faint watermark, and the stored file is never modified, so
+what was issued stays what was issued.
+
+### The organisation's own logo
+
+While filling in the assessment, an organisation can add its own logo, which
+appears on their report wherever the template puts `{{client_logo}}`. It is
+optional and says so, guarded by the assessment's own reference and link rather
+than an account, and can be replaced or removed at any point before the report
+goes out.
 
 ## Invitations that do not arrive
 
@@ -268,12 +348,22 @@ server, never from a `NEXT_PUBLIC_` variable, and `store-supabase.ts` is
 marked server-only. Anyone who can read the dashboard is still checked against
 `rmi_admins` before any page or API route touches the data.
 
-**The migration never changes existing data.** `0002_storage_on_supabase.sql`
+**The migrations never change existing data.** `0002_storage_on_supabase.sql`
 only adds: one enum value (`waived`), a few nullable or defaulted columns, one
 table (`rmi_settings`, closed to every role but the service role) and one
-index. No drops, deletes, updates or type changes, and every statement is
-guarded, so it is safe to run twice and safe on a project that already holds
-data. Existing rows read the new columns as their default.
+index. `0003_report_sent.sql` adds three nullable columns.
+`0004_report_templates_and_branding.sql` adds five nullable columns, the
+`rmi_report_templates` table (closed the same way) and a private `rmi-assets`
+storage bucket for uploads. No drops, deletes, updates or type changes anywhere,
+and every statement is guarded, so each is safe to run twice and safe on a
+project that already holds data. Existing rows read the new columns as their
+default.
+
+Uploaded files go in that bucket, which is private: nothing in it is reachable
+by URL. Logos are served through `/api/assets/`, which will only serve the two
+prefixes that hold them, and an issued PDF goes through its own route behind the
+assessment's token. That is also what lets an expired report be stamped as it is
+served.
 
 **Importing the old file.** Settings > Storage shows what the local JSON file
 holds and imports it with one button. It only inserts: a row that already
@@ -394,8 +484,10 @@ the container, would be sturdier still.
    set `PESAPAL_ENV=live`. Until they are set, the Pay button says plainly that
    card payment is off and points people at the contact form.
 2. **Storage.** Submissions live in Supabase. Run
-   `supabase/migrations/0002_storage_on_supabase.sql` and then
-   `0003_report_sent.sql` (after 0001) in the SQL editor, then set `SUPABASE_SERVICE_ROLE_KEY` on the server. In that order:
+   `supabase/migrations/0002_storage_on_supabase.sql`, then
+   `0003_report_sent.sql`, then `0004_report_templates_and_branding.sql` (all
+   after 0001) in the SQL editor, then set `SUPABASE_SERVICE_ROLE_KEY` on the
+   server. In that order:
    the key is what switches storage on, and the app needs the new columns first.
    Then open Settings > Storage and use "Import into Supabase" once to bring in
    anything in the old local file. See "Storage" below.

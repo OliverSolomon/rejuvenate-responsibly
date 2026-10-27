@@ -35,6 +35,18 @@ export const findByMerchantReference: typeof file.findByMerchantReference = (...
 export const setReport: typeof file.setReport = (...a) => impl().setReport(...a);
 export const editReport: typeof file.editReport = (...a) => impl().editReport(...a);
 export const markReportSent: typeof file.markReportSent = (...a) => impl().markReportSent(...a);
+export const setReportPdf: typeof file.setReportPdf = (...a) => impl().setReportPdf(...a);
+
+/* the report template and the organisation's own logo */
+
+export const readTemplate: typeof file.readTemplate = () => impl().readTemplate();
+export const saveTemplateDraft: typeof file.saveTemplateDraft = (...a) =>
+  impl().saveTemplateDraft(...a);
+export const publishTemplate: typeof file.publishTemplate = (...a) =>
+  impl().publishTemplate(...a);
+export const discardTemplateDraft: typeof file.discardTemplateDraft = () =>
+  impl().discardTemplateDraft();
+export const setClientLogo: typeof file.setClientLogo = (...a) => impl().setClientLogo(...a);
 
 /* sharing */
 

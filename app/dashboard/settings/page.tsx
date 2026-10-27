@@ -1,13 +1,20 @@
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
+import { BrandPanel } from "@/components/dashboard/brand-panel";
 import { SamplesPanel } from "@/components/dashboard/samples-panel";
 import { SettingsForm } from "@/components/dashboard/settings-form";
 import { StoragePanel } from "@/components/dashboard/storage-panel";
 import { SAMPLE_CASES } from "@/lib/rmi/samples";
 import { kesPerUsd } from "@/lib/rmi/fx";
 import { modelCatalogue } from "@/lib/rmi/models";
-import { settingsView } from "@/lib/rmi/settings";
-import { countSamples, legacySummary, storageBackend, storageStatus } from "@/lib/rmi/store";
+import { brandAssets, settingsView } from "@/lib/rmi/settings";
+import {
+  countSamples,
+  legacySummary,
+  readTemplate,
+  storageBackend,
+  storageStatus,
+} from "@/lib/rmi/store";
 
 export const metadata: Metadata = pageMeta({
   title: "Settings",
@@ -27,9 +34,9 @@ export default async function SettingsPage() {
   // say so here rather than failing the page on the first missing column.
   const blocked = status !== null && !status.schemaReady;
 
-  const [view, loaded] = blocked
-    ? [null, { assessments: 0, responses: 0 }]
-    : await Promise.all([settingsView(), countSamples()]);
+  const [view, loaded, brand, template] = blocked
+    ? [null, { assessments: 0, responses: 0 }, {}, { version: 0 }]
+    : await Promise.all([settingsView(), countSamples(), brandAssets(), readTemplate()]);
   const [catalogue, fx] = await Promise.all([modelCatalogue(), kesPerUsd()]);
 
   return (
@@ -54,6 +61,17 @@ export default async function SettingsPage() {
             models={catalogue.models}
             pricesFrom={catalogue.source}
             fx={fx}
+          />
+        )}
+        {view && (
+          <BrandPanel
+            logo={brand.logo}
+            stamp={brand.stamp}
+            templateState={{
+              live: template.published ? "published" : "built-in",
+              hasDraft: Boolean(template.draft),
+              version: template.version,
+            }}
           />
         )}
         {view && <SamplesPanel cases={SAMPLE_CASES} loaded={loaded} />}

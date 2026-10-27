@@ -9,6 +9,7 @@ import { generateReport } from "@/lib/rmi/report";
 import { reportConfigured } from "@/lib/rmi/settings";
 import { reportReadyEmail, send } from "@/lib/rmi/mailer";
 import { siteUrl } from "@/lib/rmi/urls";
+import { composeReport } from "@/lib/rmi/compose";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -28,7 +29,19 @@ export async function GET(request: Request) {
   if (!assessment.report) {
     return NextResponse.json({ error: "No report has been generated yet." }, { status: 404 });
   }
-  return NextResponse.json(assessment.report);
+
+  // The whole document, letterhead and all, built the same way as the preview
+  // an admin approved and the PDF that was attached to their email.
+  const composed = await composeReport(assessment);
+
+  return NextResponse.json({
+    ...assessment.report,
+    documentHtml: composed?.html ?? null,
+    expired: composed?.expired ?? false,
+    expiresAt: composed?.expiresAt ?? null,
+    /** Whether there is an issued PDF to download, as opposed to printing the page. */
+    hasPdf: Boolean(assessment.report.pdfPath),
+  });
 }
 
 export async function POST(request: Request) {

@@ -11,6 +11,7 @@ import {
   type Payment,
   type Profile,
   type Report,
+  type ReportTemplate,
   type Share,
   type StakeholderResponse,
   type StoredSettings,
@@ -32,6 +33,7 @@ type Db = {
   assessments: Assessment[];
   stakeholderResponses: StakeholderResponse[];
   settings: StoredSettings;
+  template?: ReportTemplate;
 };
 
 async function read(): Promise<Db> {
@@ -42,6 +44,7 @@ async function read(): Promise<Db> {
       assessments: parsed.assessments ?? [],
       stakeholderResponses: parsed.stakeholderResponses ?? [],
       settings: parsed.settings ?? {},
+      ...(parsed.template ? { template: parsed.template } : {}),
     };
   } catch {
     return { assessments: [], stakeholderResponses: [], settings: {} };
@@ -351,6 +354,103 @@ export async function changeSettings(
   return transact((db) => {
     db.settings = fn(db.settings);
     return db.settings;
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* the report template                                                        */
+/* -------------------------------------------------------------------------- */
+
+export async function readTemplate(): Promise<ReportTemplate> {
+  return (await read()).template ?? { version: 0 };
+}
+
+export async function saveTemplateDraft(
+  html: string,
+  doc: string | null,
+  by: string,
+): Promise<ReportTemplate> {
+  return transact((db) => {
+    const current = db.template ?? { version: 0 };
+    db.template = {
+      ...current,
+      draft: {
+        html,
+        at: new Date().toISOString(),
+        ...(doc ? { doc } : {}),
+        ...(by ? { by } : {}),
+      },
+    };
+    return db.template;
+  });
+}
+
+/** Move the draft into place as the live template and bump the version. */
+export async function publishTemplate(by: string): Promise<ReportTemplate | undefined> {
+  return transact((db) => {
+    const current = db.template;
+    if (!current?.draft) return undefined;
+    db.template = {
+      version: current.version + 1,
+      draft: current.draft,
+      published: {
+        html: current.draft.html,
+        at: new Date().toISOString(),
+        ...(current.draft.doc ? { doc: current.draft.doc } : {}),
+        ...(by ? { by } : {}),
+      },
+    };
+    return db.template;
+  });
+}
+
+/** Throw the draft away. What is published keeps serving reports. */
+export async function discardTemplateDraft(): Promise<ReportTemplate> {
+  return transact((db) => {
+    const current = db.template ?? { version: 0 };
+    const next: ReportTemplate = { version: current.version };
+    if (current.published) next.published = current.published;
+    db.template = next;
+    return next;
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* the issued PDF and the organisation's logo                                 */
+/* -------------------------------------------------------------------------- */
+
+export async function setReportPdf(
+  id: string,
+  pdf: { path: string; size: number; templateVersion?: number },
+): Promise<Assessment | undefined> {
+  return transact((db) => {
+    const found = db.assessments.find((x) => x.id === id);
+    if (!found?.report) return undefined;
+    const now = new Date().toISOString();
+    found.report = {
+      ...found.report,
+      pdfPath: pdf.path,
+      pdfSize: pdf.size,
+      pdfAt: now,
+      ...(pdf.templateVersion != null ? { templateVersion: pdf.templateVersion } : {}),
+    };
+    found.updatedAt = now;
+    return found;
+  });
+}
+
+export async function setClientLogo(
+  id: string,
+  token: string,
+  logoPath: string | null,
+): Promise<Assessment | undefined> {
+  return transact((db) => {
+    const found = db.assessments.find((x) => x.id === id && x.token === token);
+    if (!found) return undefined;
+    if (logoPath) found.clientLogo = logoPath;
+    else delete found.clientLogo;
+    found.updatedAt = new Date().toISOString();
+    return found;
   });
 }
 
