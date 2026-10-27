@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { saveProfile, type ProfileUpdate } from "@/lib/rmi/settings";
+import { parseHex } from "@/lib/rmi/palette";
 import { isCountryCode, isCurrencyCode } from "@/lib/rmi/regions";
 import { pricing } from "@/lib/rmi/pricing";
 import { getDashboardUser } from "@/utils/supabase/server";
@@ -153,6 +154,23 @@ function parse(body: unknown): { update: ProfileUpdate } | { error: string } {
       tiers[id] = tier;
     }
     update.tiers = tiers;
+  }
+
+  if ("palette" in body) {
+    if (body.palette === null) update.palette = null;
+    else if (!isObject(body.palette)) {
+      return { error: "palette has to be an object, or null for the house colours." };
+    } else {
+      const seeds: Record<string, string> = {};
+      for (const key of ["ink", "accent", "paper"] as const) {
+        const value = body.palette[key];
+        if (typeof value !== "string" || !parseHex(value)) {
+          return { error: `The ${key} colour is not a hex colour.` };
+        }
+        seeds[key] = value.trim().toLowerCase();
+      }
+      update.palette = seeds as NonNullable<ProfileUpdate["palette"]>;
+    }
   }
 
   if ("samplesHidden" in body) {

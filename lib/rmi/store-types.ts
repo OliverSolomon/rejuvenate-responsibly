@@ -7,6 +7,26 @@ import type { Answers } from "./scoring";
  * store-supabase.ts) and by the rest of the app. No I/O lives here.
  */
 
+/**
+ * A firm using this installation.
+ *
+ * Everything else is scoped to one of these. The slug is what appears in an
+ * assessment link, so a submission attributes to whoever sent the client there;
+ * the id is what the rest of the data points at, so a company can be renamed
+ * without orphaning anything.
+ */
+export type Company = {
+  id: string;
+  slug: string;
+  name: string;
+  /** The firm that owns the installation. Exactly one, and it cannot be closed. */
+  isDefault: boolean;
+  /** A closed company keeps its data and stops taking new assessments. */
+  active: boolean;
+  createdAt: string;
+  createdBy?: string;
+};
+
 export type Profile = {
   organisation: string;
   contactName: string;
@@ -222,6 +242,12 @@ export type StoredSettings = {
   brand?: {
     logo?: BrandAsset;
     stamp?: BrandAsset;
+    /**
+     * The three colours taken from the logo, applied to the dashboard only
+     * once somebody has looked at the preview and said yes. Absent means the
+     * house colours, which is also what clearing it goes back to.
+     */
+    palette?: { ink: string; accent: string; paper: string };
   };
   pesapal?: {
     consumerKey?: string;
@@ -239,6 +265,8 @@ export type StoredSettings = {
 };
 
 export type Assessment = {
+  /** Which company's link this came through, and therefore whose client it is. */
+  companyId: string;
   /** Short code the person keeps, e.g. RMI-7F3K2Q. */
   id: string;
   /** Secret half of the resume link. The code alone opens nothing. */

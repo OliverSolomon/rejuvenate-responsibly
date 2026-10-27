@@ -8,7 +8,7 @@ import {
   updateName,
 } from "@/lib/rmi/team";
 import { deliverInvitation } from "@/lib/rmi/team-invite";
-import { getDashboardUser } from "@/utils/supabase/server";
+import { canManageTeam, currentScope, teamView } from "@/lib/rmi/scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,8 +31,8 @@ function fail(error: unknown, fallback: string) {
 }
 
 async function owner() {
-  const user = await getDashboardUser();
-  if (!user) {
+  const scope = await currentScope();
+  if (!scope) {
     return {
       response: NextResponse.json(
         { error: "You are not signed in as an admin." },
@@ -40,7 +40,7 @@ async function owner() {
       ),
     };
   }
-  if (user.role !== "owner") {
+  if (!canManageTeam(scope)) {
     return {
       response: NextResponse.json(
         { error: "Only an owner can change who is on the team." },
@@ -48,7 +48,7 @@ async function owner() {
       ),
     };
   }
-  return { user };
+  return { user: scope.user, scope };
 }
 
 export async function PATCH(
@@ -58,6 +58,7 @@ export async function PATCH(
   const gate = await owner();
   if (gate.response) return gate.response;
   const user = gate.user!;
+  const view = teamView(gate.scope!);
 
   const { id } = await params;
   if (!UUID.test(id)) {
@@ -74,13 +75,17 @@ export async function PATCH(
   try {
     switch (body.action) {
       case "role":
-        return NextResponse.json({ member: await changeRole(id, body.role, user.id) });
+        return NextResponse.json({
+          member: await changeRole(id, body.role, user.id, view, {
+            allowSuper: gate.scope!.isSuper,
+          }),
+        });
 
       case "name":
-        return NextResponse.json({ member: await updateName(id, body.fullName) });
+        return NextResponse.json({ member: await updateName(id, body.fullName, view) });
 
       case "password": {
-        const member = await setMemberPassword(id, body.password);
+        const member = await setMemberPassword(id, body.password, view);
         return NextResponse.json({
           member,
           note: "Tell them the password yourself. It is not emailed, because an emailed password is a password in two places.",
@@ -88,7 +93,7 @@ export async function PATCH(
       }
 
       case "invite": {
-        const invitation = await makeInvitation(id);
+        const invitation = await makeInvitation(id, view);
         const delivery = await deliverInvitation(invitation, user.name || user.email);
         return NextResponse.json({
           invited: true,
@@ -117,6 +122,7 @@ export async function DELETE(
   const gate = await owner();
   if (gate.response) return gate.response;
   const user = gate.user!;
+  const view = teamView(gate.scope!);
 
   const { id } = await params;
   if (!UUID.test(id)) {
@@ -124,7 +130,7 @@ export async function DELETE(
   }
 
   try {
-    await removeMember(id, user.id);
+    await removeMember(id, user.id, view);
     return NextResponse.json({ removed: true });
   } catch (error) {
     return fail(error, "They could not be removed.");

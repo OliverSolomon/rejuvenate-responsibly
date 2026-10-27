@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   clearAnswers,
+  companyBySlug,
   createAssessment,
   getAssessment,
   normaliseCode,
@@ -52,6 +53,25 @@ export async function GET(request: Request) {
   return NextResponse.json(publicView(found));
 }
 
+/**
+ * Which company this assessment belongs to.
+ *
+ * Each firm hands out its own link, `?c=<slug>`, and the slug on the link is
+ * what attributes the work. An unknown or closed company falls back to the
+ * installation's own, because a mistyped link should still take the submission
+ * rather than lose it.
+ */
+async function companyFor(url: URL): Promise<string> {
+  const slug = url.searchParams.get("c")?.trim().toLowerCase();
+  if (!slug) return "default";
+  const company = await companyBySlug(slug);
+  if (!company || !company.active) {
+    console.warn(`[rmi:assessment] no open company for the link slug ${slug}`);
+    return "default";
+  }
+  return company.id;
+}
+
 /** Start a new assessment, and email the person their ID. */
 export async function POST(request: Request) {
   let body: { profile?: Profile };
@@ -69,13 +89,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const created = await createAssessment({
-    organisation: profile.organisation.trim(),
-    contactName: profile.contactName?.trim() ?? "",
-    email: profile.email.trim().toLowerCase(),
-    role: profile.role?.trim() ?? "",
-    sector: profile.sector?.trim() ?? "",
-  });
+  const created = await createAssessment(
+    {
+      organisation: profile.organisation.trim(),
+      contactName: profile.contactName?.trim() ?? "",
+      email: profile.email.trim().toLowerCase(),
+      role: profile.role?.trim() ?? "",
+      sector: profile.sector?.trim() ?? "",
+    },
+    await companyFor(new URL(request.url)),
+  );
 
   const resumeUrl = `${siteUrl()}/rmi/assessment?id=${created.id}&t=${created.token}`;
   const delivery = await send({

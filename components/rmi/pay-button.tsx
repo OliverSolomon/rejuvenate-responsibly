@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { companyQuery } from "@/lib/rmi/link-company";
 import type { Tier } from "@/lib/rmi/pricing";
 
 // One request shared by every card on the page. Failing closed matters: if the
@@ -48,7 +49,7 @@ export function PayButton({ tier, featured }: { tier: Tier; featured: boolean })
     setBusy(true);
     setError(null);
     try {
-      const created = await fetch("/api/rmi/assessment", {
+      const created = await fetch(`/api/rmi/assessment${companyQuery()}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ profile: { ...form, role: "", sector: "" } }),

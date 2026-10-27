@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { TeamError, addMember, listTeam } from "@/lib/rmi/team";
 import { deliverInvitation } from "@/lib/rmi/team-invite";
-import { getDashboardUser } from "@/utils/supabase/server";
+import { canManageTeam, currentScope, settingsCompany, teamView } from "@/lib/rmi/scope";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,11 +24,11 @@ const notOwner = () =>
   );
 
 export async function GET() {
-  const user = await getDashboardUser();
-  if (!user) return denied();
+  const scope = await currentScope();
+  if (!scope) return denied();
 
   try {
-    return NextResponse.json({ team: await listTeam(), you: user });
+    return NextResponse.json({ team: await listTeam(teamView(scope)), you: scope.user });
   } catch (error) {
     const status = error instanceof TeamError ? error.status : 500;
     const message =
@@ -38,9 +38,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const user = await getDashboardUser();
-  if (!user) return denied();
-  if (user.role !== "owner") return notOwner();
+  const scope = await currentScope();
+  if (!scope) return denied();
+  if (!canManageTeam(scope)) return notOwner();
+  const user = scope.user;
 
   let body: Record<string, unknown>;
   try {
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
       // Absent means invite them; present means the owner is setting it.
       password: body.password === undefined || body.password === "" ? undefined : body.password,
       by: user.email,
+      // Whichever company they are managing, which for a super admin in the
+      // global view is their own.
+      companyId: settingsCompany(scope),
+      allowSuper: scope.isSuper,
     });
 
     if (!invitation) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHydrated } from "@/lib/use-hydrated";
+import { companyQuery } from "@/lib/rmi/link-company";
 import { questionsFor, type Question } from "@/lib/rmi/questions";
 import type { Answers } from "@/lib/rmi/scoring";
 
@@ -166,7 +167,7 @@ export function useAssessment(
 
     creating.current = (async () => {
       try {
-        const res = await fetch("/api/rmi/assessment", {
+        const res = await fetch(`/api/rmi/assessment${companyQuery()}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ profile: p }),

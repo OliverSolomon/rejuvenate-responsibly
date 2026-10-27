@@ -2,6 +2,7 @@ import "server-only";
 
 import { SECTION_ORDER, type SectionId } from "./questions";
 import { scoreAssessment } from "./scoring";
+import { currentScope } from "./scope";
 import { samplesHidden } from "./settings";
 import {
   isUndelivered,
@@ -63,14 +64,41 @@ function reportState(a: Assessment): ReportState {
  * whichever of them somebody remembered. Hiding never deletes: the rows are
  * still there and the switch can go back.
  */
-async function visibleAssessments(): Promise<Assessment[]> {
-  const [assessments, hidden] = await Promise.all([listAssessments(), samplesHidden()]);
-  return hidden ? assessments.filter((a) => !a.sample) : assessments;
+/**
+ * Which assessments belong to the person asking.
+ *
+ * A company sees its own work and nothing else, which is the whole point of
+ * more than one firm sharing an installation. A super admin in the global view
+ * sees everything, and with nobody signed in nothing passes, because every
+ * caller here is behind the dashboard already.
+ */
+async function ownCompany(): Promise<(a: Assessment) => boolean> {
+  const scope = await currentScope();
+  if (!scope) return () => false;
+  if (scope.companyId === null) return () => true;
+  const company = scope.companyId;
+  return (a) => (a.companyId || "default") === company;
 }
 
-export async function organisationRows(): Promise<OrganisationRow[]> {
-  const assessments = await visibleAssessments();
-  return assessments.map((a) => ({
+export async function visibleAssessments(): Promise<Assessment[]> {
+  const [assessments, hidden, mine] = await Promise.all([
+    listAssessments(),
+    samplesHidden(),
+    ownCompany(),
+  ]);
+  const ours = assessments.filter(mine);
+  return hidden ? ours.filter((a) => !a.sample) : ours;
+}
+
+/** The stakeholder answers that go with a given set of assessments. */
+export async function responsesFor(assessments: Assessment[]): Promise<StakeholderResponse[]> {
+  const keep = new Set(assessments.map((a) => a.id));
+  return (await listAllStakeholderResponses()).filter((r) => keep.has(r.assessmentId));
+}
+
+/** One assessment as a row, with nothing read: the caller already has it. */
+function rowFor(a: Assessment): OrganisationRow {
+  return {
     id: a.id,
     organisation: a.profile.organisation || "Unnamed organisation",
     contactName: a.profile.contactName,
@@ -87,7 +115,11 @@ export async function organisationRows(): Promise<OrganisationRow[]> {
     reportState: reportState(a),
     createdAt: a.createdAt,
     submittedAt: a.submittedAt,
-  }));
+  };
+}
+
+export async function organisationRows(): Promise<OrganisationRow[]> {
+  return (await visibleAssessments()).map(rowFor);
 }
 
 export type PartyRow = {
@@ -119,15 +151,19 @@ export type OrganisationDetail = {
 export async function organisationDetail(
   id: string,
 ): Promise<OrganisationDetail | null> {
-  // Not filtered: a hidden sample opened by its own link should still read, so
-  // the switch does not turn a working page into a dead one.
-  const assessments = await listAssessments();
+  // The sample switch is not applied here: a hidden sample opened by its own
+  // link should still read, so the switch does not turn a working page into a
+  // dead one. The company check is applied, because another firm's record is
+  // not something to show at all.
+  const [assessments, mine] = await Promise.all([listAssessments(), ownCompany()]);
   const assessment = assessments.find((a) => a.id === id);
-  if (!assessment) return null;
+  if (!assessment || !mine(assessment)) return null;
 
   const responses = await listStakeholderResponses(id);
   const rows = await organisationRows();
-  const row = rows.find((r) => r.id === id)!;
+  // A hidden sample is missing from the rows, so the summary is computed the
+  // same way rather than looked up.
+  const row = rows.find((r) => r.id === id) ?? rowFor(assessment);
 
   const parties: PartyRow[] = assessment.shares.map((share) => {
     const response = responses.find((r) => r.shareToken === share.token);
@@ -201,11 +237,7 @@ export type Analytics = {
 
 export async function analytics(): Promise<Analytics> {
   const assessments = await visibleAssessments();
-  const allResponses = await listAllStakeholderResponses();
-  const hidden = await samplesHidden();
-  const responses = hidden
-    ? allResponses.filter((r) => assessments.some((a) => a.id === r.assessmentId))
-    : allResponses;
+  const responses = await responsesFor(assessments);
 
   const submitted = assessments.filter((a) => a.status === "submitted");
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { responsesFor, visibleAssessments } from "@/lib/rmi/dashboard";
 import { samplesHidden } from "@/lib/rmi/settings";
-import { listAllStakeholderResponses, listAssessments } from "@/lib/rmi/store";
 import { buildWorkbook, workbookFilename } from "@/lib/rmi/workbook";
 import { getDashboardUser } from "@/utils/supabase/server";
 
@@ -27,17 +27,10 @@ export async function GET() {
   }
 
   try {
-    const [assessments, responses, hidden] = await Promise.all([
-      listAssessments(),
-      listAllStakeholderResponses(),
-      samplesHidden(),
-    ]);
-
-    const visible = hidden ? assessments.filter((a) => !a.sample) : assessments;
-    const keep = new Set(visible.map((a) => a.id));
-    const theirResponses = hidden
-      ? responses.filter((r) => keep.has(r.assessmentId))
-      : responses;
+    // The same read the responses pages use, so an export holds exactly what
+    // the person could already see: their own company, samples as set.
+    const [visible, hidden] = await Promise.all([visibleAssessments(), samplesHidden()]);
+    const theirResponses = await responsesFor(visible);
 
     const bytes = await buildWorkbook({
       assessments: visible,

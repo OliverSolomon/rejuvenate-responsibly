@@ -9,6 +9,8 @@ import {
   isCurrencyCode,
 } from "./regions";
 import { pricing, type Tier } from "./pricing";
+import { paletteCss, paletteFrom, type PaletteSeeds } from "./palette";
+import { currentScope, settingsCompany, DEFAULT_COMPANY } from "./scope";
 import { site } from "@/lib/site";
 import {
   decryptSecret,
@@ -34,6 +36,40 @@ export type Source = "dashboard" | "env" | "default" | "none";
 /* what the rest of the app reads                                             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Which company's settings a dashboard reader should use.
+ *
+ * Resolved here rather than passed through every signature, because the answer
+ * is a fact about the request and every caller would otherwise have to carry it
+ * from the page down. A request with nobody signed in falls back to the default
+ * company, which is what the public pages want.
+ */
+async function scopedSettings(): Promise<StoredSettings> {
+  const scope = await currentScope();
+  return safeSettings(scope ? settingsCompany(scope) : DEFAULT_COMPANY);
+}
+
+/**
+ * The keys the whole installation shares, which live on the default company's
+ * row: the OpenRouter key and models, the Pesapal credentials, the mail
+ * provider. One set for everyone, and only a super admin may change them.
+ */
+async function installationSettings(): Promise<StoredSettings> {
+  return safeSettings(DEFAULT_COMPANY);
+}
+
+/**
+ * The company a save belongs to.
+ *
+ * Writes resolve this the same way reads do, so a save lands on the row the
+ * person was just looking at. With nobody signed in there is nothing to write,
+ * and the default company is the only honest answer.
+ */
+async function writeCompany(): Promise<string> {
+  const scope = await currentScope();
+  return scope ? settingsCompany(scope) : DEFAULT_COMPANY;
+}
+
 function secret(stored: string | undefined, envName: string): { value?: string; source: Source; unreadable: boolean } {
   if (stored) {
     const plain = decryptSecret(stored);
@@ -56,7 +92,7 @@ function text(stored: string | undefined, envName: string, fallback?: string): {
 }
 
 export async function requirePayment(): Promise<{ value: boolean; source: Source }> {
-  const stored = await readSettings();
+  const stored = await scopedSettings();
   if (typeof stored.requirePayment === "boolean") {
     return { value: stored.requirePayment, source: "dashboard" };
   }
@@ -68,7 +104,7 @@ export async function requirePayment(): Promise<{ value: boolean; source: Source
 
 /** Dashboard switch, then RMI_EMAIL_ENABLED=false, then on. */
 export async function emailEnabled(): Promise<{ value: boolean; source: Source }> {
-  const stored = await readSettings();
+  const stored = await scopedSettings();
   if (typeof stored.emailEnabled === "boolean") {
     return { value: stored.emailEnabled, source: "dashboard" };
   }
@@ -80,7 +116,7 @@ export async function emailEnabled(): Promise<{ value: boolean; source: Source }
 
 /** Whether one kind of email may go out: the master switch and that kind's switch. */
 export async function emailAllowed(kind: EmailKind): Promise<boolean> {
-  const stored = await readSettings();
+  const stored = await scopedSettings();
   if (typeof stored.emailEnabled === "boolean") {
     if (!stored.emailEnabled) return false;
   } else if (process.env.RMI_EMAIL_ENABLED?.trim().toLowerCase() === "false") {
@@ -91,7 +127,7 @@ export async function emailAllowed(kind: EmailKind): Promise<boolean> {
 
 /** Dashboard value, then RMI_CONTACT_INBOX, then the caller's fallback. */
 export async function contactInbox(fallback: string): Promise<string> {
-  const stored = await readSettings();
+  const stored = await scopedSettings();
   return text(stored.contactInbox, "RMI_CONTACT_INBOX", fallback).value!;
 }
 
@@ -103,7 +139,7 @@ export type PesapalConfig = {
 };
 
 export async function pesapalConfig(): Promise<PesapalConfig> {
-  const s = (await readSettings()).pesapal ?? {};
+  const s = (await installationSettings()).pesapal ?? {};
   const env = text(s.env, "PESAPAL_ENV");
   return {
     consumerKey: secret(s.consumerKey, "PESAPAL_CONSUMER_KEY").value,
@@ -120,7 +156,7 @@ export type OpenRouterConfig = {
 };
 
 export async function openRouterConfig(): Promise<OpenRouterConfig> {
-  const s = (await readSettings()).openrouter ?? {};
+  const s = (await installationSettings()).openrouter ?? {};
   return {
     apiKey: secret(s.apiKey, "OPENROUTER_API_KEY").value,
     draftModel: text(s.draftModel, "OPENROUTER_MODEL", DEFAULT_DRAFT_MODEL).value!,
@@ -179,9 +215,10 @@ function textView(stored: string | undefined, envName: string, fallback = ""): T
 }
 
 export async function settingsView(): Promise<SettingsView> {
-  const stored = await readSettings();
-  const p = stored.pesapal ?? {};
-  const o = stored.openrouter ?? {};
+  // The switches belong to the company; the keys belong to the installation.
+  const [stored, shared] = await Promise.all([scopedSettings(), installationSettings()]);
+  const p = shared.pesapal ?? {};
+  const o = shared.openrouter ?? {};
   return {
     encryption: encryptionAvailable(),
     requirePayment: await requirePayment(),
@@ -201,8 +238,8 @@ export async function settingsView(): Promise<SettingsView> {
       draftModel: textView(o.draftModel, "OPENROUTER_MODEL", DEFAULT_DRAFT_MODEL),
       humanizerModel: textView(o.humanizerModel, "OPENROUTER_HUMANIZER_MODEL", DEFAULT_HUMANIZER_MODEL),
     },
-    updatedAt: stored.updatedAt ?? null,
-    updatedBy: stored.updatedBy ?? null,
+    updatedAt: stored.updatedAt ?? shared.updatedAt ?? null,
+    updatedBy: stored.updatedBy ?? shared.updatedBy ?? null,
   };
 }
 
@@ -257,36 +294,57 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
     throw new SecretsUnavailableError();
   }
 
-  await changeSettings((current): StoredSettings => {
-    const next: StoredSettings = {
-      ...current,
-      pesapal: { ...current.pesapal },
-      openrouter: { ...current.openrouter },
-    };
+  const company = await writeCompany();
+  const touchesCompany =
+    typeof update.requirePayment === "boolean" ||
+    typeof update.emailEnabled === "boolean" ||
+    update.emailKinds !== undefined ||
+    update.contactInbox !== undefined;
+  const touchesInstallation = update.pesapal !== undefined || update.openrouter !== undefined;
 
-    if (typeof update.requirePayment === "boolean") next.requirePayment = update.requirePayment;
+  // Two rows, because the two halves answer to different people: the switches
+  // are the company's to set, the keys are one set the installation shares.
+  if (touchesCompany) {
+    await changeSettings((current): StoredSettings => {
+      const next: StoredSettings = { ...current };
 
-    if (typeof update.emailEnabled === "boolean") next.emailEnabled = update.emailEnabled;
-    if (update.emailKinds) {
-      next.emailKinds = { ...current.emailKinds, ...update.emailKinds };
-    }
-    applyText(next, "contactInbox", update.contactInbox);
+      if (typeof update.requirePayment === "boolean") next.requirePayment = update.requirePayment;
+      if (typeof update.emailEnabled === "boolean") next.emailEnabled = update.emailEnabled;
+      if (update.emailKinds) {
+        next.emailKinds = { ...current.emailKinds, ...update.emailKinds };
+      }
+      applyText(next, "contactInbox", update.contactInbox);
 
-    const p = next.pesapal!;
-    applySecret(p, "consumerKey", update.pesapal?.consumerKey);
-    applySecret(p, "consumerSecret", update.pesapal?.consumerSecret);
-    applyText(p, "env", update.pesapal?.env);
-    applyText(p, "ipnId", update.pesapal?.ipnId);
+      next.updatedAt = new Date().toISOString();
+      next.updatedBy = by;
+      return next;
+    }, company);
+  }
 
-    const o = next.openrouter!;
-    applySecret(o, "apiKey", update.openrouter?.apiKey);
-    applyText(o, "draftModel", update.openrouter?.draftModel);
-    applyText(o, "humanizerModel", update.openrouter?.humanizerModel);
+  if (touchesInstallation) {
+    await changeSettings((current): StoredSettings => {
+      const next: StoredSettings = {
+        ...current,
+        pesapal: { ...current.pesapal },
+        openrouter: { ...current.openrouter },
+      };
 
-    next.updatedAt = new Date().toISOString();
-    next.updatedBy = by;
-    return next;
-  });
+      const p = next.pesapal!;
+      applySecret(p, "consumerKey", update.pesapal?.consumerKey);
+      applySecret(p, "consumerSecret", update.pesapal?.consumerSecret);
+      applyText(p, "env", update.pesapal?.env);
+      applyText(p, "ipnId", update.pesapal?.ipnId);
+
+      const o = next.openrouter!;
+      applySecret(o, "apiKey", update.openrouter?.apiKey);
+      applyText(o, "draftModel", update.openrouter?.draftModel);
+      applyText(o, "humanizerModel", update.openrouter?.humanizerModel);
+
+      next.updatedAt = new Date().toISOString();
+      next.updatedBy = by;
+      return next;
+    }, DEFAULT_COMPANY);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -295,9 +353,29 @@ export async function saveSettings(update: SettingsUpdate, by: string): Promise<
 
 export type BrandKind = "logo" | "stamp";
 
-export async function brandAssets(): Promise<{ logo?: BrandAsset; stamp?: BrandAsset }> {
-  const stored = await readSettings();
-  return { logo: stored.brand?.logo, stamp: stored.brand?.stamp };
+export async function brandAssets(): Promise<{
+  logo?: BrandAsset;
+  stamp?: BrandAsset;
+  palette?: PaletteSeeds;
+}> {
+  const stored = await scopedSettings();
+  return {
+    logo: stored.brand?.logo,
+    stamp: stored.brand?.stamp,
+    palette: stored.brand?.palette,
+  };
+}
+
+/**
+ * The company's colours as CSS, or null when they are using the house theme.
+ *
+ * Read by the dashboard shell on every request, so a company that has accepted
+ * its own palette sees it everywhere rather than on the page that set it.
+ */
+export async function themeCss(): Promise<string | null> {
+  const seeds = (await scopedSettings()).brand?.palette;
+  if (!seeds) return null;
+  return paletteCss(paletteFrom(seeds));
 }
 
 /** Record an uploaded logo or stamp. Returns what the previous one was, to delete. */
@@ -315,7 +393,7 @@ export async function saveBrandAsset(
       updatedAt: new Date().toISOString(),
       updatedBy: by,
     };
-  });
+  }, await writeCompany());
   return previous;
 }
 
@@ -335,7 +413,7 @@ export async function clearBrandAsset(
       updatedAt: new Date().toISOString(),
       updatedBy: by,
     };
-  });
+  }, await writeCompany());
   return previous;
 }
 
@@ -353,7 +431,7 @@ export type Place = { country: string; currency: string; currencySource: Source 
  * rather than pretending a shilling was picked by hand.
  */
 export async function place(): Promise<Place> {
-  const stored = await readSettings();
+  const stored = await scopedSettings();
   const country = isCountryCode(stored.organisation?.country)
     ? stored.organisation!.country!
     : DEFAULT_COUNTRY;
@@ -376,9 +454,9 @@ export async function place(): Promise<Place> {
  * on a machine with no database behind it. A storage problem there should leave
  * the site reading from the values in the code, not stop it being built.
  */
-async function safeSettings(): Promise<StoredSettings> {
+async function safeSettings(companyId: string = DEFAULT_COMPANY): Promise<StoredSettings> {
   try {
-    return await readSettings();
+    return await readSettings(companyId);
   } catch (error) {
     console.warn(
       "[rmi:settings] could not read the saved settings, using the built-in values",
@@ -478,7 +556,7 @@ export async function tiers(): Promise<Tier[]> {
 
 /** Whether sample rows are being kept out of the views. */
 export async function samplesHidden(): Promise<boolean> {
-  return (await readSettings()).samples?.hidden === true;
+  return (await scopedSettings()).samples?.hidden === true;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -497,6 +575,8 @@ export type ProfileUpdate = {
   socials?: { label: string; href: string }[] | null;
   tiers?: StoredSettings["tiers"];
   samplesHidden?: boolean;
+  /** null goes back to the house colours. */
+  palette?: PaletteSeeds | null;
 };
 
 /**
@@ -506,6 +586,7 @@ export type ProfileUpdate = {
  * needs the encryption key, so it keeps working on a server that has none.
  */
 export async function saveProfile(update: ProfileUpdate, by: string): Promise<void> {
+  const company = await writeCompany();
   await changeSettings((current): StoredSettings => {
     const next: StoredSettings = { ...current };
 
@@ -559,8 +640,15 @@ export async function saveProfile(update: ProfileUpdate, by: string): Promise<vo
       next.samples = { ...next.samples, hidden: update.samplesHidden };
     }
 
+    if (update.palette !== undefined) {
+      const brand = { ...next.brand };
+      if (update.palette === null) delete brand.palette;
+      else brand.palette = update.palette;
+      next.brand = brand;
+    }
+
     next.updatedAt = new Date().toISOString();
     next.updatedBy = by;
     return next;
-  });
+  }, company);
 }

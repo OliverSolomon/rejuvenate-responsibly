@@ -15,7 +15,21 @@ import type { TeamRole } from "@/utils/supabase/server";
  * actually hold that line, since a route can be called directly, and they also
  * stop the two ways a team can lock itself out: removing the last owner, and
  * removing yourself.
+ *
+ * Every read and write here is about one company, because more than one firm
+ * uses this installation and a company's team is its own. A super admin is the
+ * exception twice over: they see across companies, and their own row is hidden
+ * from everybody else, so an owner looking at their team sees only the people
+ * they put there.
  */
+
+/** Whose team to read: one company, or all of them for a super admin. */
+export type TeamView = {
+  /** null for every company at once, which only a super admin gets. */
+  companyId: string | null;
+  /** Super admin rows are left out unless a super admin is looking. */
+  includeSuper: boolean;
+};
 
 export class TeamError extends Error {
   /** What to answer the browser with. Every message here is safe to show. */
@@ -31,6 +45,7 @@ export class TeamError extends Error {
 export type TeamMember = {
   id: string;
   email: string;
+  companyId: string;
   name: string | null;
   role: TeamRole;
   addedAt: string;
@@ -106,6 +121,13 @@ export function assertCanRemove(team: TeamMember[], id: string, actorId: string)
   const target = team.find((m) => m.id === id);
   if (!target) throw new TeamError("That person is not on the team.", 404);
 
+  if (target.role === "super" && team.filter((m) => m.role === "super").length === 1) {
+    throw new TeamError(
+      "This is the only super admin, so removing them would leave nobody who can manage the installation.",
+      409,
+    );
+  }
+
   if (id === actorId) {
     throw new TeamError(
       "You cannot remove yourself. Ask another owner to do it, so nobody locks themselves out by accident.",
@@ -130,7 +152,15 @@ export function assertCanChangeRole(
   const target = team.find((m) => m.id === id);
   if (!target) throw new TeamError("That person is not on the team.", 404);
   if (target.role === role) return;
-  if (role === "owner") return;
+
+  if (target.role === "super" && team.filter((m) => m.role === "super").length === 1) {
+    throw new TeamError(
+      "This is the only super admin. Make someone else a super admin first, or nobody would be able to manage the installation.",
+      409,
+    );
+  }
+
+  if (role === "owner" || role === "super") return;
 
   if (team.filter((m) => m.role === "owner").length === 1 && target.role === "owner") {
     throw new TeamError(
@@ -155,6 +185,7 @@ type AdminRow = {
   email: string;
   full_name: string | null;
   role: string;
+  company_id: string | null;
   created_at: string;
   invited_by: string | null;
   invited_at: string | null;
@@ -172,14 +203,19 @@ async function authUsers(): Promise<Map<string, User>> {
   return new Map(data.users.map((u) => [u.id, u]));
 }
 
-export async function listTeam(): Promise<TeamMember[]> {
-  const [{ data, error }, accounts] = await Promise.all([
-    admin()
-      .from("rmi_admins")
-      .select("id, email, full_name, role, created_at, invited_by, invited_at")
-      .order("created_at", { ascending: true }),
-    authUsers(),
-  ]);
+export async function listTeam(view: TeamView): Promise<TeamMember[]> {
+  let query = admin()
+    .from("rmi_admins")
+    .select("id, email, full_name, role, company_id, created_at, invited_by, invited_at")
+    .order("created_at", { ascending: true });
+
+  // A super admin in the global view sees everyone. Anyone else sees one
+  // company, and the filter happens here rather than after the rows arrive so
+  // another company's team never reaches this process at all.
+  if (view.companyId !== null) query = query.eq("company_id", view.companyId);
+  if (!view.includeSuper) query = query.neq("role", "super");
+
+  const [{ data, error }, accounts] = await Promise.all([query, authUsers()]);
   if (error) throw new TeamError(`The team could not be read: ${error.message}`, 502);
 
   return (data as AdminRow[]).map((row) => {
@@ -187,8 +223,9 @@ export async function listTeam(): Promise<TeamMember[]> {
     return {
       id: row.id,
       email: row.email,
+      companyId: row.company_id ?? "default",
       name: row.full_name,
-      role: row.role === "owner" ? "owner" : "admin",
+      role: row.role === "super" ? "super" : row.role === "owner" ? "owner" : "admin",
       addedAt: row.created_at,
       invitedBy: row.invited_by,
       invitedAt: row.invited_at,
@@ -199,8 +236,8 @@ export async function listTeam(): Promise<TeamMember[]> {
   });
 }
 
-async function member(id: string): Promise<TeamMember> {
-  const team = await listTeam();
+async function member(id: string, view: TeamView): Promise<TeamMember> {
+  const team = await listTeam(view);
   const found = team.find((m) => m.id === id);
   if (!found) throw new TeamError("That person is not on the team.", 404);
   return found;
@@ -228,18 +265,31 @@ export async function addMember(input: {
   role?: unknown;
   password?: unknown;
   by: string;
+  /** The company they join. A super admin joins the default company. */
+  companyId: string;
+  /** True only when a super admin is adding, which is the only way to make one. */
+  allowSuper?: boolean;
 }): Promise<{ member: TeamMember; invitation: Invitation | null }> {
   const email = normaliseEmail(input.email);
-  const role: TeamRole = input.role === "owner" ? "owner" : "admin";
+  if (input.role === "super" && !input.allowSuper) {
+    throw new TeamError("Only a super admin can add another super admin.", 403);
+  }
+  const role: TeamRole =
+    input.role === "super" ? "super" : input.role === "owner" ? "owner" : "admin";
+  // A super admin answers to the installation, not to one firm's team.
+  const companyId = role === "super" ? "default" : input.companyId;
+  const view: TeamView = { companyId: null, includeSuper: true };
   const fullName =
     typeof input.fullName === "string" && input.fullName.trim() ? input.fullName.trim() : null;
   const password = input.password === undefined || input.password === null
     ? null
     : checkPassword(input.password);
 
-  const existing = await listTeam();
+  // Checked across every company: one email is one account, so the same person
+  // cannot be on two teams and the error has to say so plainly.
+  const existing = await listTeam(view);
   if (existing.some((m) => m.email.toLowerCase() === email)) {
-    throw new TeamError("That email is already on the team.", 409);
+    throw new TeamError("That email already has access to the dashboard.", 409);
   }
 
   const account = await accountFor(email);
@@ -286,17 +336,18 @@ export async function addMember(input: {
       email,
       full_name: fullName,
       role,
+      company_id: companyId,
       invited_by: input.by,
       invited_at: new Date().toISOString(),
     });
   if (error) throw new TeamError(`They could not be added to the team: ${error.message}`, 502);
 
-  return { member: await member(userId!), invitation };
+  return { member: await member(userId!, view), invitation };
 }
 
 /** A fresh link for someone who never used the first one, or forgot their password. */
-export async function makeInvitation(id: string): Promise<Invitation> {
-  const target = await member(id);
+export async function makeInvitation(id: string, view: TeamView): Promise<Invitation> {
+  const target = await member(id, view);
   const type: Invitation["type"] = target.confirmed ? "recovery" : "invite";
 
   const { data, error } = await admin().auth.admin.generateLink({
@@ -315,8 +366,12 @@ export async function makeInvitation(id: string): Promise<Invitation> {
 /* -------------------------------------------------------------------------- */
 
 /** Set someone's password for them, for when an invitation is not wanted. */
-export async function setMemberPassword(id: string, password: unknown): Promise<TeamMember> {
-  const target = await member(id);
+export async function setMemberPassword(
+  id: string,
+  password: unknown,
+  view: TeamView,
+): Promise<TeamMember> {
+  const target = await member(id, view);
   const checked = checkPassword(password);
 
   const { error } = await admin().auth.admin.updateUserById(target.id, {
@@ -324,33 +379,47 @@ export async function setMemberPassword(id: string, password: unknown): Promise<
     email_confirm: true,
   });
   if (error) throw new TeamError(`The password could not be set: ${error.message}`, 502);
-  return member(id);
+  return member(id, view);
 }
 
 export async function changeRole(
   id: string,
   role: unknown,
   actorId: string,
+  view: TeamView,
+  options: { allowSuper?: boolean } = {},
 ): Promise<TeamMember> {
-  if (role !== "owner" && role !== "admin") {
-    throw new TeamError("A role is either owner or admin.", 400);
+  if (role !== "owner" && role !== "admin" && role !== "super") {
+    throw new TeamError("A role is super admin, owner or admin.", 400);
   }
-  const team = await listTeam();
+  if (role === "super" && !options.allowSuper) {
+    throw new TeamError("Only a super admin can make someone a super admin.", 403);
+  }
+  const team = await listTeam(view);
   assertCanChangeRole(team, id, role, actorId);
-  if (team.find((m) => m.id === id)?.role === role) return member(id);
+  if (team.find((m) => m.id === id)?.role === role) return member(id, view);
 
-  const { error } = await admin().from("rmi_admins").update({ role }).eq("id", id);
+  // Promoting to super moves them to the installation's own company, which is
+  // where the shared keys live and what the global view is anchored to.
+  const patch: { role: TeamRole; company_id?: string } =
+    role === "super" ? { role, company_id: "default" } : { role };
+
+  const { error } = await admin().from("rmi_admins").update(patch).eq("id", id);
   if (error) throw new TeamError(`The role could not be changed: ${error.message}`, 502);
-  return member(id);
+  return member(id, view);
 }
 
-export async function updateName(id: string, fullName: unknown): Promise<TeamMember> {
+export async function updateName(
+  id: string,
+  fullName: unknown,
+  view: TeamView,
+): Promise<TeamMember> {
   const name =
     typeof fullName === "string" && fullName.trim() ? fullName.trim().slice(0, 120) : null;
-  await member(id);
+  await member(id, view);
   const { error } = await admin().from("rmi_admins").update({ full_name: name }).eq("id", id);
   if (error) throw new TeamError(`The name could not be changed: ${error.message}`, 502);
-  return member(id);
+  return member(id, view);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -365,8 +434,8 @@ export async function updateName(id: string, fullName: unknown): Promise<TeamMem
  * adding them back later is one step and nothing recorded against their id
  * loses its reference.
  */
-export async function removeMember(id: string, actorId: string): Promise<void> {
-  assertCanRemove(await listTeam(), id, actorId);
+export async function removeMember(id: string, actorId: string, view: TeamView): Promise<void> {
+  assertCanRemove(await listTeam(view), id, actorId);
 
   const { error } = await admin().from("rmi_admins").delete().eq("id", id);
   if (error) throw new TeamError(`They could not be removed: ${error.message}`, 502);

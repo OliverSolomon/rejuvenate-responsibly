@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { TeamPanel } from "@/components/dashboard/team-panel";
 import { pageMeta } from "@/lib/seo";
 import { TeamError, listTeam, teamConfigured, type TeamMember } from "@/lib/rmi/team";
-import { getDashboardUser } from "@/utils/supabase/server";
+import { currentScope, teamView } from "@/lib/rmi/scope";
 
 export const metadata: Metadata = pageMeta({
   title: "Team",
@@ -16,8 +16,9 @@ export const metadata: Metadata = pageMeta({
 export const dynamic = "force-dynamic";
 
 export default async function TeamPage() {
-  const user = await getDashboardUser();
-  if (!user) redirect("/signin?error=denied&next=/dashboard/settings/team");
+  const scope = await currentScope();
+  if (!scope) redirect("/signin?error=denied&next=/dashboard/settings/team");
+  const user = scope.user;
 
   const configured = teamConfigured();
 
@@ -25,7 +26,7 @@ export default async function TeamPage() {
   let problem: string | null = null;
   if (configured) {
     try {
-      team = await listTeam();
+      team = await listTeam(teamView(scope));
     } catch (error) {
       problem =
         error instanceof TeamError

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PalettePrompt } from "@/components/dashboard/palette-prompt";
+import type { PaletteSeeds } from "@/lib/rmi/palette";
 import type { BrandAsset } from "@/lib/rmi/store-types";
 
 const ACCEPT = "image/png,image/jpeg,image/webp";
@@ -158,10 +160,13 @@ function Slot({
 export function BrandPanel({
   logo,
   stamp,
+  palette,
   templateState,
 }: {
   logo?: BrandAsset;
   stamp?: BrandAsset;
+  /** The colours this company has accepted, if any. */
+  palette?: PaletteSeeds;
   templateState: { live: "published" | "built-in"; hasDraft: boolean; version: number };
 }) {
   const router = useRouter();
@@ -179,6 +184,11 @@ export function BrandPanel({
         <Slot kind="logo" asset={logo} onDone={refresh} />
         <Slot kind="stamp" asset={stamp} onDone={refresh} />
       </div>
+
+      <PalettePrompt
+        logoUrl={logo ? `/api/assets/${logo.path}` : undefined}
+        current={palette}
+      />
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-forest-900/10 bg-bone-100 p-5">
         <div>

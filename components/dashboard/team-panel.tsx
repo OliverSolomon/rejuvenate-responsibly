@@ -35,7 +35,9 @@ export function TeamPanel({
   configured: boolean;
 }) {
   const router = useRouter();
-  const isOwner = you.role === "owner";
+  const isSuper = you.role === "super";
+  // A super admin manages any team, so the controls are the owner's controls.
+  const isOwner = you.role === "owner" || isSuper;
 
   const [note, setNote] = useState<Note>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -239,11 +241,17 @@ export function TeamPanel({
               <span className="text-[0.8125rem] font-medium text-forest-900/70">Role</span>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value === "owner" ? "owner" : "admin")}
+                onChange={(e) => {
+                  const picked = e.target.value;
+                  setRole(picked === "owner" || picked === "super" ? picked : "admin");
+                }}
                 className="h-11 rounded-xl border border-forest-900/15 bg-bone-50 px-3.5 text-[0.9375rem]"
               >
                 <option value="admin">Admin, cannot manage the team</option>
                 <option value="owner">Owner, can manage the team</option>
+                {isSuper && (
+                  <option value="super">Super admin, sees every company</option>
+                )}
               </select>
             </label>
             <label className="flex flex-col gap-2">
@@ -304,8 +312,8 @@ export function TeamPanel({
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2 text-[0.9375rem] text-forest-900">
                   <span className="font-medium">{member.name || member.email}</span>
-                  <Badge tone={member.role === "owner" ? "strong" : "neutral"}>
-                    {member.role}
+                  <Badge tone={member.role === "admin" ? "neutral" : "strong"}>
+                    {member.role === "super" ? "super admin" : member.role}
                   </Badge>
                   <Badge tone={s.tone === "good" ? "good" : "pending"}>{s.label}</Badge>
                   {isYou && <span className="text-[0.75rem] text-forest-900/45">that is you</span>}
@@ -352,7 +360,7 @@ export function TeamPanel({
                     Set a password
                   </Button>
 
-                  {!isYou && !lastOwner && (
+                  {!isYou && !lastOwner && member.role !== "super" && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -374,7 +382,29 @@ export function TeamPanel({
                     </Button>
                   )}
 
-                  {!isYou && !lastOwner && (
+                  {isSuper && !isYou && member.role !== "super" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={working}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Make ${member.email} a super admin? They will see every company and be able to configure the installation.`,
+                          )
+                        ) {
+                          void act(member, { action: "role", role: "super" }, () => ({
+                            kind: "ok",
+                            text: `${member.email} is now a super admin.`,
+                          }));
+                        }
+                      }}
+                    >
+                      Make a super admin
+                    </Button>
+                  )}
+
+                  {!isYou && !lastOwner && (member.role !== "super" || isSuper) && (
                     <Button
                       variant="ghost"
                       size="sm"

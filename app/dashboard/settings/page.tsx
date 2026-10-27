@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { pageMeta } from "@/lib/seo";
 import { BrandPanel } from "@/components/dashboard/brand-panel";
+import { CompaniesPanel } from "@/components/dashboard/companies-panel";
 import { OrganisationPanel } from "@/components/dashboard/organisation-panel";
 import { SamplesPanel } from "@/components/dashboard/samples-panel";
 import { SettingsForm } from "@/components/dashboard/settings-form";
@@ -9,6 +10,8 @@ import { SettingsTabs, type Tab } from "@/components/dashboard/settings-tabs";
 import { StoragePanel } from "@/components/dashboard/storage-panel";
 import { TiersPanel } from "@/components/dashboard/tiers-panel";
 import { WebsitePanel } from "@/components/dashboard/website-panel";
+import { companyRows } from "@/lib/rmi/companies";
+import { canConfigureInstallation, currentScope } from "@/lib/rmi/scope";
 import { SAMPLE_CASES } from "@/lib/rmi/samples";
 import { ratePerUsd } from "@/lib/rmi/fx";
 import { modelCatalogue } from "@/lib/rmi/models";
@@ -71,6 +74,7 @@ function Onward({
 }
 
 export default async function SettingsPage() {
+  const scope = await currentScope();
   const backend = storageBackend();
   const [status, legacy] = await Promise.all([storageStatus(), legacySummary()]);
 
@@ -96,6 +100,11 @@ export default async function SettingsPage() {
   // Model prices are quoted in dollars; the rate turns them into what the
   // organisation bills in.
   const [catalogue, fx] = await Promise.all([modelCatalogue(), ratePerUsd(currency)]);
+
+  // Only the super admin is told that other companies exist at all, so the
+  // read is skipped rather than rendered empty for everyone else.
+  const companies =
+    scope && canConfigureInstallation(scope) && !blocked ? await companyRows() : null;
 
   const storage = (
     <div className="flex flex-col gap-6">
@@ -139,6 +148,7 @@ export default async function SettingsPage() {
         <BrandPanel
           logo={brand.logo}
           stamp={brand.stamp}
+          palette={brand.palette}
           templateState={{
             live: template.published ? "published" : "built-in",
             hasDraft: Boolean(template.draft),
@@ -230,9 +240,26 @@ export default async function SettingsPage() {
         storage
       ),
     },
-    // Last on purpose: the plumbing comes after everything a client sees.
-    { id: "developer", label: "Supabase and keys", panel: storage },
   ];
+
+  // Between the client-facing tabs and the plumbing, because it is about the
+  // installation rather than about any one company's work.
+  if (companies && scope) {
+    tabs.push({
+      id: "companies",
+      label: "Companies",
+      panel: (
+        <CompaniesPanel
+          companies={companies}
+          viewing={scope.companyId}
+          home={scope.homeCompanyId}
+        />
+      ),
+    });
+  }
+
+  // Last on purpose: the plumbing comes after everything a client sees.
+  tabs.push({ id: "developer", label: "Supabase and keys", panel: storage });
 
   return (
     <div>
