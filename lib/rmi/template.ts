@@ -12,6 +12,49 @@ import { site } from "@/lib/site";
  * is on screen is what prints.
  */
 
+/**
+ * The site's own fonts, declared under their real names.
+ *
+ * next/font serves these same files under a generated family name that only the
+ * site's CSS knows, which is no use to a report: the document is standalone,
+ * rendered in an iframe and printed, so it needs a family name it can ask for.
+ * Injected into every composed document, whatever template built it, so a
+ * letterhead an admin designed is in the house type as well.
+ *
+ * The editor is the exception. It lays out HTML without fetching anything, so
+ * the PDF it renders uses its own font rather than these. The report on screen
+ * and the report on paper differ in type for that reason, which is why the
+ * template editor says the look is set with the editor's own tools.
+ */
+export const FONT_FACE_CSS = `
+@font-face {
+  font-family: "Inter Tight";
+  src: url("/fonts/inter-tight-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Schibsted Grotesk";
+  src: url("/fonts/schibsted-grotesk-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+`;
+
+/** The stack a report uses, matching the site's body type. */
+export const DOCUMENT_FONT_STACK =
+  '"Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif';
+
+/** And the stack its headings use, matching the site's display type. */
+export const DOCUMENT_DISPLAY_STACK =
+  '"Schibsted Grotesk", "Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif';
+
 export type PlaceholderId =
   | "report"
   | "logo"
@@ -164,7 +207,7 @@ export const DEFAULT_TEMPLATE_HTML = `<!doctype html>
   body {
     margin: 0;
     padding: 56px 64px;
-    font-family: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 11.5pt;
     line-height: 1.65;
     color: var(--ink);
@@ -177,12 +220,19 @@ export const DEFAULT_TEMPLATE_HTML = `<!doctype html>
   .letterhead .marks { display: flex; align-items: center; gap: 16px; }
   .logo { max-height: 56px; width: auto; }
   .client-logo { max-height: 44px; width: auto; }
-  .firm { font-weight: 600; letter-spacing: 0.01em; text-transform: uppercase; font-size: 10pt; }
+  .firm {
+    font-family: "Schibsted Grotesk", "Inter Tight", Arial, sans-serif;
+    font-weight: 600; letter-spacing: 0.01em; text-transform: uppercase; font-size: 10pt;
+  }
   .contact { text-align: right; font-size: 8.5pt; color: var(--muted); line-height: 1.5; }
   .meta { margin: 28px 0 0; font-size: 9pt; color: var(--muted); }
   .meta strong { color: var(--ink); font-weight: 600; }
   .expiry { margin: 20px 0 0; }
   .body { margin-top: 28px; }
+  h1, h2, h3 {
+    font-family: "Schibsted Grotesk", "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: -0.015em;
+  }
   h1 { font-size: 20pt; line-height: 1.2; margin: 0 0 14px; }
   h2 { font-size: 13pt; margin: 26px 0 8px; }
   h3 { font-size: 11.5pt; margin: 20px 0 6px; }
@@ -290,6 +340,33 @@ export const EDITOR_STARTER_HTML = `<!doctype html>
   </table>
 </body>
 </html>`;
+
+/**
+ * Put the house fonts into a finished document.
+ *
+ * The style block goes at the end of `head` so it wins over anything the
+ * template declared, and the body rule is written as a low specificity default:
+ * it sets the type for a document that never asked, without overriding a font
+ * an admin chose deliberately on a particular paragraph.
+ *
+ * A document the editor wrote has no `head` of its own worth the name, so one
+ * is made if it is missing. This runs on the merged document, not the template,
+ * so it cannot be saved away by an edit.
+ */
+export function withHouseFonts(html: string): string {
+  const style =
+    `<style data-house-fonts>${FONT_FACE_CSS}` +
+    `body{font-family:${DOCUMENT_FONT_STACK};}` +
+    `h1,h2,h3,h4{font-family:${DOCUMENT_DISPLAY_STACK};}` +
+    `</style>`;
+
+  if (html.includes("data-house-fonts")) return html;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${style}</head>`);
+  if (/<body[^>]*>/i.test(html)) {
+    return html.replace(/<body[^>]*>/i, (open) => `<head>${style}</head>${open}`);
+  }
+  return `${style}${html}`;
+}
 
 /** The notice that replaces {{expiry_notice}} once a report is past its year. */
 export function expiryNoticeHtml(expires: Date): string {

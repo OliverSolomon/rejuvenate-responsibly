@@ -1,18 +1,33 @@
 -- =============================================================================
--- Rate My Impact: complete schema.
+-- Rate My Impact: the whole database, in one script.
 --
--- Run this once against a fresh Supabase project and everything the assessment
--- needs exists: tables, indexes, row level security, the admin allow list and
--- the trigger that keeps updated_at honest.
+-- Run this against a Supabase project and everything the app needs exists:
+-- tables, indexes, row level security, the dashboard allow list with its two
+-- roles, the report template, the uploads bucket and the triggers that keep
+-- updated_at honest.
 --
--- It is written to be safe to run twice. Every object is created only if it is
--- missing and every policy is dropped before it is recreated, so re-running
--- after an edit does not error and does not duplicate anything.
+-- It is the only script to run. It replaces the five numbered migrations this
+-- project used to carry, and it works in all three situations:
+--
+--   * a fresh project, where it creates everything
+--   * a project running an older version, where it adds what is missing
+--   * a project already up to date, where it changes nothing
+--
+-- Safe to run as many times as you like. Every object is created only when it
+-- is missing, every policy is dropped before being recreated, and no statement
+-- here deletes, truncates or updates a single row of anybody's data.
 --
 -- How to run it:
 --   Supabase dashboard  SQL Editor, paste, Run
 --   CLI                 supabase db push
 --   psql                psql "$DATABASE_URL" -f 0001_rate_my_impact.sql
+--
+-- A note on how it is laid out. Each table is created with the shape it should
+-- end up with, which is what you want when reading it. Underneath, the
+-- "bringing an older project up to date" section adds those same columns with
+-- `if not exists`, which is what an existing project needs. On a fresh project
+-- that second section does nothing; on an older one the first section does
+-- nothing. The two paths are checked against each other and end up identical.
 -- =============================================================================
 
 create extension if not exists "pgcrypto";
@@ -25,9 +40,15 @@ do $$ begin
   create type rmi_assessment_status as enum ('draft', 'submitted');
 exception when duplicate_object then null; end $$;
 
+-- `waived` is an assessment opened while the admin "require payment" switch was
+-- off, kept separate so test runs never count as revenue.
 do $$ begin
-  create type rmi_payment_status as enum ('unpaid', 'pending', 'paid', 'failed');
+  create type rmi_payment_status as enum ('unpaid', 'pending', 'paid', 'failed', 'waived');
 exception when duplicate_object then null; end $$;
+
+-- For a project whose type was made before `waived` existed. Adding a value
+-- does not touch any existing row.
+alter type rmi_payment_status add value if not exists 'waived';
 
 do $$ begin
   create type rmi_report_status as enum ('none', 'draft', 'issued');
@@ -36,16 +57,24 @@ exception when duplicate_object then null; end $$;
 -- -----------------------------------------------------------------------------
 -- Who may read the dashboard.
 --
--- Signing in is not the same as being allowed in. A row here, added by hand or
--- by another admin, is what grants access. Without one a signed-in user sees
--- nothing, which is what we want for a dashboard holding every client's
--- answers.
+-- Signing in is not the same as being allowed in. A row here is what grants
+-- access. Without one a signed-in user sees nothing, which is what we want for
+-- a dashboard holding every client's answers.
+--
+-- Two roles. An owner adds and removes people and changes roles; an admin does
+-- everything else. The first row is inserted by hand (see the end of this
+-- file); everyone after that is added from Settings > Team.
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.rmi_admins (
   id          uuid primary key references auth.users (id) on delete cascade,
   email       text not null,
   full_name   text,
+  role        text not null default 'admin',
+  -- Email of the owner who added them, and when. Null for a row inserted by
+  -- hand, and for anyone added before roles existed.
+  invited_by  text,
+  invited_at  timestamptz,
   created_at  timestamptz not null default now()
 );
 
@@ -92,32 +121,51 @@ create table if not exists public.rmi_assessments (
   order_tracking_id   text,
   payment_method      text,
   paid_at             timestamptz,
+  payment_updated_at  timestamptz,
+
+  -- The organisation's own logo, uploaded while filling in the assessment.
+  -- A path inside the rmi-assets bucket, e.g. client-logos/RMI-7F3K2Q.png.
+  -- Null means they did not add one, which is the normal case.
+  client_logo         text,
+
+  -- Rows loaded from the dashboard's sample data panel. Lets that panel remove
+  -- its own rows and nothing else.
+  sample              boolean not null default false,
 
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),
   submitted_at        timestamptz
 );
 
-create index if not exists rmi_assessments_email_idx       on public.rmi_assessments (lower(email));
-create index if not exists rmi_assessments_org_idx         on public.rmi_assessments (lower(organisation));
-create index if not exists rmi_assessments_status_idx      on public.rmi_assessments (status);
-create index if not exists rmi_assessments_created_idx     on public.rmi_assessments (created_at desc);
-create index if not exists rmi_assessments_payment_idx     on public.rmi_assessments (payment_status);
+create index if not exists rmi_assessments_email_idx   on public.rmi_assessments (lower(email));
+create index if not exists rmi_assessments_org_idx     on public.rmi_assessments (lower(organisation));
+create index if not exists rmi_assessments_status_idx  on public.rmi_assessments (status);
+create index if not exists rmi_assessments_created_idx on public.rmi_assessments (created_at desc);
+create index if not exists rmi_assessments_payment_idx on public.rmi_assessments (payment_status);
 
 -- -----------------------------------------------------------------------------
 -- The people the assessment was shared with
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.rmi_shares (
-  id             uuid primary key default gen_random_uuid(),
-  assessment_id  text not null references public.rmi_assessments (id) on delete cascade,
-  name           text not null default '',
-  email          text not null,
-  relationship   text not null default '',
+  id              uuid primary key default gen_random_uuid(),
+  assessment_id   text not null references public.rmi_assessments (id) on delete cascade,
+  name            text not null default '',
+  email           text not null,
+  relationship    text not null default '',
   -- Their own survey link. Unguessable, and scoped to this one assessment.
-  token          text not null unique,
-  invited_at     timestamptz not null default now(),
-  responded_at   timestamptz,
+  token           text not null unique,
+  invited_at      timestamptz not null default now(),
+  responded_at    timestamptz,
+
+  -- Whether the invitation email arrived. Null on invitations sent before this
+  -- was recorded, which the dashboard treats as unknown rather than failed.
+  delivery_status text check (delivery_status in ('sent', 'failed', 'not_sent')),
+  delivery_error  text,
+  delivery_at     timestamptz,
+  -- When an admin told the submitter that this address never received it.
+  notified_at     timestamptz,
+  notified_by     text,
 
   -- One invitation per address per assessment.
   unique (assessment_id, email)
@@ -139,6 +187,7 @@ create table if not exists public.rmi_stakeholder_responses (
   relationship   text not null default '',
   answers        jsonb not null default '{}'::jsonb,
   score          jsonb,
+  sample         boolean not null default false,
   created_at     timestamptz not null default now()
 );
 
@@ -162,11 +211,167 @@ create table if not exists public.rmi_reports (
   generated_at        timestamptz not null default now(),
   edited_at           timestamptz,
   edited_by           uuid references auth.users (id) on delete set null,
+  edited_by_email     text,
   issued_at           timestamptz,
-  issued_by           uuid references auth.users (id) on delete set null
+  issued_by           uuid references auth.users (id) on delete set null,
+
+  -- Whether the draft went through the humaniser pass, and with which model.
+  humanized           boolean not null default false,
+  humanizer_model     text,
+
+  -- When an admin sent the final report, by whom, and how many invited
+  -- stakeholders had not answered at that moment.
+  sent_at             timestamptz,
+  sent_by             text,
+  sent_outstanding    integer,
+
+  -- The PDF as it was issued, in the rmi-assets bucket.
+  pdf_path            text,
+  pdf_size            integer,
+  pdf_at              timestamptz,
+  -- Which published template version built it.
+  template_version    integer
 );
 
 create index if not exists rmi_reports_status_idx on public.rmi_reports (status);
+
+-- -----------------------------------------------------------------------------
+-- Dashboard settings
+--
+-- One row. `data` holds the settings an admin saved; secrets inside it are
+-- already encrypted by the application (AES-256-GCM, key kept in the server
+-- environment), so a database dump does not expose them.
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.rmi_settings (
+  id          text primary key default 'default' check (id = 'default'),
+  data        jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now(),
+  updated_by  text
+);
+
+comment on table public.rmi_settings is
+  'Single row of dashboard settings. Secrets inside data are encrypted by the application.';
+
+-- -----------------------------------------------------------------------------
+-- The house report template
+--
+-- The letterhead and footer every report is wrapped in, as a draft and as the
+-- published version, so changes can be worked on without touching what clients
+-- receive.
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.rmi_report_templates (
+  -- One template for the firm. The check keeps it that way.
+  id                 text primary key default 'default' check (id = 'default'),
+
+  -- What an admin is working on. Never used for a real report.
+  draft_html         text,
+  -- The editor's own document, so reopening a draft is lossless rather than a
+  -- round trip through HTML. A path inside the rmi-assets bucket.
+  draft_doc          text,
+  draft_updated_at   timestamptz,
+  draft_updated_by   text,
+
+  -- What live reports are built from. Null until an admin publishes once, and
+  -- the application falls back to its built-in template until then.
+  published_html     text,
+  published_doc      text,
+  published_at       timestamptz,
+  published_by       text,
+  -- Rises on every publish, so a report can record which one built it.
+  version            integer not null default 0,
+
+  updated_at         timestamptz not null default now()
+);
+
+comment on table public.rmi_report_templates is
+  'Single row holding the letterhead and footer a report is wrapped in, as a draft and as the published version.';
+
+-- -----------------------------------------------------------------------------
+-- Bringing an older project up to date
+--
+-- Everything above creates tables in their finished shape, which is right for a
+-- fresh project and does nothing on one that already has them. These statements
+-- are the other half: they add the columns and constraints that arrived after
+-- the first version, for a project that has been running a while. On a fresh
+-- project every one of them is a no-op.
+-- -----------------------------------------------------------------------------
+
+alter table public.rmi_admins
+  add column if not exists invited_by text,
+  add column if not exists invited_at timestamptz;
+
+-- The role column needs care. Adding a NOT NULL column with a default gives
+-- every existing row that default, and the people already in this table are the
+-- ones who set the dashboard up, so they should be owners. So it arrives with
+-- 'owner' as its default, which backfills them, and the default is then set to
+-- 'admin' for everything inserted afterwards. No row is ever updated, and the
+-- application states the role explicitly in any case.
+alter table public.rmi_admins
+  add column if not exists role text not null default 'owner';
+
+alter table public.rmi_admins alter column role set default 'admin';
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'rmi_admins_role_check') then
+    alter table public.rmi_admins
+      add constraint rmi_admins_role_check check (role in ('owner', 'admin'));
+  end if;
+end $$;
+
+alter table public.rmi_assessments
+  add column if not exists payment_updated_at timestamptz,
+  add column if not exists client_logo text,
+  add column if not exists sample boolean not null default false;
+
+alter table public.rmi_shares
+  add column if not exists delivery_status text,
+  add column if not exists delivery_error text,
+  add column if not exists delivery_at timestamptz,
+  add column if not exists notified_at timestamptz,
+  add column if not exists notified_by text;
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'rmi_shares_delivery_status_check') then
+    alter table public.rmi_shares
+      add constraint rmi_shares_delivery_status_check
+      check (delivery_status in ('sent', 'failed', 'not_sent'));
+  end if;
+end $$;
+
+alter table public.rmi_stakeholder_responses
+  add column if not exists sample boolean not null default false;
+
+alter table public.rmi_reports
+  add column if not exists edited_by_email text,
+  add column if not exists humanized boolean not null default false,
+  add column if not exists humanizer_model text,
+  add column if not exists sent_at timestamptz,
+  add column if not exists sent_by text,
+  add column if not exists sent_outstanding integer,
+  add column if not exists pdf_path text,
+  add column if not exists pdf_size integer,
+  add column if not exists pdf_at timestamptz,
+  add column if not exists template_version integer;
+
+-- -----------------------------------------------------------------------------
+-- Indexes and comments on the columns above
+--
+-- These come after both halves, not beside the tables, because a column added
+-- by the upgrade section does not exist until that section has run. Indexing or
+-- commenting on one earlier would fail on a project part way through.
+-- -----------------------------------------------------------------------------
+
+create index if not exists rmi_assessments_sample_idx on public.rmi_assessments (sample) where sample;
+
+create index if not exists rmi_admins_role_idx on public.rmi_admins (role);
+
+comment on column public.rmi_admins.role is
+  'owner manages the team; admin does everything else. The last owner cannot be removed.';
+
+comment on column public.rmi_reports.pdf_path is
+  'The PDF as it was issued. Reports are valid for one year from sent_at; after that this file still downloads but is stamped as expired on the way out.';
 
 -- -----------------------------------------------------------------------------
 -- updated_at
@@ -187,6 +392,11 @@ create trigger rmi_assessments_touch
   before update on public.rmi_assessments
   for each row execute function public.rmi_touch_updated_at();
 
+drop trigger if exists rmi_report_templates_touch on public.rmi_report_templates;
+create trigger rmi_report_templates_touch
+  before update on public.rmi_report_templates
+  for each row execute function public.rmi_touch_updated_at();
+
 -- -----------------------------------------------------------------------------
 -- Row level security
 --
@@ -194,6 +404,9 @@ create trigger rmi_assessments_touch
 -- RLS entirely, so the policies below exist for one purpose: letting a
 -- signed-in admin read through the dashboard. No anon role can read any of it,
 -- which matters because these tables hold named contacts and their answers.
+--
+-- Settings and the report template have row level security on and no policies
+-- at all, so only the service role reaches them.
 -- -----------------------------------------------------------------------------
 
 alter table public.rmi_admins                enable row level security;
@@ -201,6 +414,8 @@ alter table public.rmi_assessments           enable row level security;
 alter table public.rmi_shares                enable row level security;
 alter table public.rmi_stakeholder_responses enable row level security;
 alter table public.rmi_reports               enable row level security;
+alter table public.rmi_settings              enable row level security;
+alter table public.rmi_report_templates      enable row level security;
 
 drop policy if exists rmi_admins_self_read on public.rmi_admins;
 create policy rmi_admins_self_read on public.rmi_admins
@@ -251,6 +466,11 @@ grant select on public.rmi_admins, public.rmi_assessments, public.rmi_shares,
 grant update (status, markdown, edited_at, edited_by, issued_at, issued_by)
   on public.rmi_reports to authenticated;
 
+-- Closed to everyone but the service role, and the grants are revoked as well
+-- so a careless policy added later cannot expose them by accident.
+revoke all on public.rmi_settings from anon, authenticated;
+revoke all on public.rmi_report_templates from anon, authenticated;
+
 -- -----------------------------------------------------------------------------
 -- Dashboard read model
 --
@@ -282,7 +502,8 @@ select
        and s.responded_at is not null)                  as responded_count,
   coalesce(r.status, 'none')::rmi_report_status         as report_status,
   r.generated_at                                        as report_generated_at,
-  r.edited_at                                           as report_edited_at
+  r.edited_at                                           as report_edited_at,
+  r.sent_at                                             as report_sent_at
 from public.rmi_assessments a
 left join public.rmi_reports r on r.assessment_id = a.id;
 
@@ -293,12 +514,29 @@ revoke all on public.rmi_assessment_overview from anon;
 grant select on public.rmi_assessment_overview to authenticated;
 
 -- -----------------------------------------------------------------------------
+-- Where uploads live
+--
+-- Logos, stamps, the template document and issued PDFs. Private: nothing in
+-- here is reachable by URL. The application reads it with the service role and
+-- serves the bytes through its own routes, which is what keeps an issued report
+-- behind its token and lets an expired one be stamped on the way out.
+-- -----------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public)
+values ('rmi-assets', 'rmi-assets', false)
+on conflict (id) do nothing;
+
+-- -----------------------------------------------------------------------------
 -- Granting yourself access
 --
--- Create the account first (sign in once through the app, or add the user in
--- Authentication > Users), then run:
+-- Create the account first (Authentication > Users > Add user), then run this
+-- once. The first person has to be an owner, because an owner is the only one
+-- who can add anybody else.
 --
---   insert into public.rmi_admins (id, email, full_name)
---   select id, email, 'Your Name' from auth.users where email = 'you@example.com'
---   on conflict (id) do nothing;
+--   insert into public.rmi_admins (id, email, full_name, role)
+--   select id, email, 'Your Name', 'owner'
+--   from auth.users where email = 'you@example.com'
+--   on conflict (id) do update set role = 'owner';
+--
+-- After that, everyone else is added from Settings > Team in the dashboard.
 -- -----------------------------------------------------------------------------

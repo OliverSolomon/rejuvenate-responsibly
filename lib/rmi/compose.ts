@@ -10,6 +10,7 @@ import {
   firmValues,
   imageTag,
   mergeTemplate,
+  withHouseFonts,
   type TemplateValues,
 } from "./template";
 
@@ -99,7 +100,9 @@ export async function composeReport(
   };
 
   return {
-    html: mergeTemplate(templateHtml, values),
+    // The house fonts go on last, so a template the editor stripped the styling
+    // out of still reads in the same type as the rest of the site.
+    html: withHouseFonts(mergeTemplate(templateHtml, values)),
     templateVersion,
     expired,
     expiresAt: expires?.toISOString() ?? null,

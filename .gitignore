@@ -64,3 +64,5 @@ rr-*.tar.gz
 
 # Docs
 /docs/*
+# the site fonts, copied out of app/fonts at build time for report documents
+/public/fonts/

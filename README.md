@@ -234,8 +234,8 @@ Settings > Team.
 There are two levels. An **owner** adds and removes people and changes roles.
 An **admin** does everything else: reading responses, writing and sending
 reports, changing the template and the settings. Everyone already in
-`rmi_admins` when `0005_team_roles.sql` ran became an owner, since they are the
-people who set this up; anyone added afterwards is an admin unless an owner says
+`rmi_admins` before roles existed became an owner when the migration ran, since
+they are the people who set this up; anyone added afterwards is an admin unless an owner says
 otherwise.
 
 Two rules stop a team locking itself out, and they live in `lib/rmi/team.ts` as
@@ -297,8 +297,7 @@ someone never does there is nothing to send. **Write report now** generates one
 from what has come in, through the same drafting and humaniser passes, so it can
 be reviewed, edited and sent. A send records when, by whom and how many answers
 were outstanding, and is shown as "Report sent". If email is not configured
-nothing is recorded as sent. Migration `0003_report_sent.sql` adds the three
-columns it needs, additively.
+nothing is recorded as sent.
 
 ## How a report looks
 
@@ -404,16 +403,25 @@ server, never from a `NEXT_PUBLIC_` variable, and `store-supabase.ts` is
 marked server-only. Anyone who can read the dashboard is still checked against
 `rmi_admins` before any page or API route touches the data.
 
-**The migrations never change existing data.** `0002_storage_on_supabase.sql`
-only adds: one enum value (`waived`), a few nullable or defaulted columns, one
-table (`rmi_settings`, closed to every role but the service role) and one
-index. `0003_report_sent.sql` adds three nullable columns.
-`0004_report_templates_and_branding.sql` adds five nullable columns, the
-`rmi_report_templates` table (closed the same way) and a private `rmi-assets`
-storage bucket for uploads. No drops, deletes, updates or type changes anywhere,
-and every statement is guarded, so each is safe to run twice and safe on a
-project that already holds data. Existing rows read the new columns as their
-default.
+**One script, and it never changes existing data.**
+`supabase/migrations/0001_rate_my_impact.sql` is the whole database: five
+tables, the settings row, the report template, the admin allow list with its two
+roles, row level security, the grants, the dashboard view and the private
+`rmi-assets` bucket. It is the only thing to run, and it is safe on a fresh
+project, on one running an older version, and on one that is already up to date.
+There are no drops, deletes, truncates, updates or type changes anywhere in it;
+every object is created only when missing and every policy is dropped before
+being recreated. Existing rows read new columns as their default.
+
+It is laid out in two halves. Each table is created with the shape it should end
+up with, which is what you want when reading it, and underneath that an upgrade
+section adds those same columns with `if not exists` for a project that has been
+running a while. On a fresh project the second half does nothing; on an older
+one the first half does nothing. Both routes were checked against each other: a
+fresh run, a run after the old five scripts, a run after only the first, and a
+run after stopping part way all produce the same 274 columns, constraints,
+indexes, policies, grants, triggers and enum values. Only the physical order of
+columns differs, which nothing in the app depends on.
 
 Uploaded files go in that bucket, which is private: nothing in it is reachable
 by URL. Logos are served through `/api/assets/`, which will only serve the two
@@ -540,11 +548,9 @@ the container, would be sturdier still.
    set `PESAPAL_ENV=live`. Until they are set, the Pay button says plainly that
    card payment is off and points people at the contact form.
 2. **Storage.** Submissions live in Supabase. Run
-   `supabase/migrations/0002_storage_on_supabase.sql`, then
-   `0003_report_sent.sql`, then `0004_report_templates_and_branding.sql` (all
-   after 0001) in the SQL editor, then set `SUPABASE_SERVICE_ROLE_KEY` on the
-   server. In that order:
-   the key is what switches storage on, and the app needs the new columns first.
+   `supabase/migrations/0001_rate_my_impact.sql` in the SQL editor, then set
+   `SUPABASE_SERVICE_ROLE_KEY` on the server. In that order: the key is what
+   switches storage on, and the app needs the tables first.
    Then open Settings > Storage and use "Import into Supabase" once to bring in
    anything in the old local file. See "Storage" below.
 3. **Email.** Set `MAILTRAP_TOKEN`. Start with `MAILTRAP_INBOX_ID` pointed at a
@@ -556,7 +562,7 @@ the container, would be sturdier still.
 4. **Images.** Everything in `public/images` is a generated placeholder, marked
    as such on the page. Drop real photographs in at the same filenames and the
    captions disappear on their own (remove the `swap` prop on `<Media>`).
-5. **The dashboard.** Run the migrations in a Supabase project, put the project
+5. **The dashboard.** Run the migration in a Supabase project, put the project
    URL and publishable key in the environment, and insert your own row into
    `rmi_admins`. Nobody can reach `/dashboard` until that row exists, and the
    first row is an owner, who adds everyone else from Settings > Team.
