@@ -5,7 +5,7 @@ import {
   settingsView,
   type SettingsUpdate,
 } from "@/lib/rmi/settings";
-import { canConfigureInstallation, currentScope, DEFAULT_COMPANY, settingsCompany } from "@/lib/rmi/scope";
+import { currentScope } from "@/lib/rmi/scope";
 import { isEmailKind, type EmailKind } from "@/lib/rmi/email-kinds";
 import { SecretsUnavailableError } from "@/lib/rmi/secrets";
 
@@ -157,20 +157,6 @@ export async function PUT(request: Request) {
     return NextResponse.json(
       { error: "Confirm that you understand this change before saving a key or the payment environment." },
       { status: 400 },
-    );
-  }
-
-  // The default company's keys are the ones every other company may borrow, so
-  // only a super admin changes them. Any other company's keys are its own to
-  // set, and saveSettings refuses if it is still on the shared ones.
-  if (
-    (pesapal || openrouter) &&
-    settingsCompany(scope) === DEFAULT_COMPANY &&
-    !canConfigureInstallation(scope)
-  ) {
-    return NextResponse.json(
-      { error: "Only the super admin can change the keys the installation shares." },
-      { status: 403 },
     );
   }
 

@@ -20,8 +20,8 @@ import { getDashboardUser, type DashboardUser, type TeamRole } from "@/utils/sup
  *   Installation  the OpenRouter key and models, the Pesapal credentials, the
  *                 mail provider, Supabase itself
  *
- * The installation settings live on the default company's row and only a super
- * admin can change them. By default every other company borrows them, along with
+ * The installation settings live on the default company's row, which its own
+ * admins and the super admin can change. By default every other company borrows them, along with
  * the report template, so a new firm works from its first day. A super admin can
  * switch that off per company and per thing (see `sharing` in StoredSettings),
  * and from then on that company's own admins keep their own key, account or
