@@ -14,8 +14,13 @@
 --   * a project already up to date, where it changes nothing
 --
 -- Safe to run as many times as you like. Every object is created only when it
--- is missing, every policy is dropped before being recreated, and no statement
--- here deletes, truncates or updates a single row of anybody's data.
+-- is missing, and every policy is dropped before being recreated.
+--
+-- No statement here deletes or truncates anybody's data. Two statements do
+-- change existing rows, and both are named where they appear: the settings and
+-- the report template used to be pinned to a single row, and are now keyed by
+-- company, so the row that is already there is adopted by the default company.
+-- That is a rename of its key, not a loss of its contents.
 --
 -- How to run it:
 --   Supabase dashboard  SQL Editor, paste, Run
@@ -55,6 +60,44 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 -- -----------------------------------------------------------------------------
+-- Companies
+--
+-- More than one firm uses this. Each has its own people, its own branding, its
+-- own report template, its own currency and its own clients, and sees none of
+-- anybody else's. A super admin sees across all of them.
+--
+-- The slug is what appears in an assessment link, so a submission attributes to
+-- whoever sent the client there. The default company keeps the plain link with
+-- no slug on it.
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.rmi_companies (
+  -- Stable and short, and the key everything else points at. Not the slug: a
+  -- company can be renamed without orphaning its data.
+  id          text primary key,
+  -- What goes in the assessment link, e.g. /rmi/assessment?c=acme.
+  slug        text not null unique,
+  name        text not null,
+  -- The firm that owns the installation. Exactly one, and it cannot be closed.
+  is_default  boolean not null default false,
+  -- A closed company keeps its data and stops accepting new assessments.
+  active      boolean not null default true,
+  created_at  timestamptz not null default now(),
+  created_by  text,
+  updated_at  timestamptz not null default now()
+);
+
+comment on table public.rmi_companies is
+  'The firms using this installation. Everything else is scoped to one of these.';
+
+-- The company that was always here, adopting everything that already exists.
+insert into public.rmi_companies (id, slug, name, is_default)
+values ('default', 'rejuvenate', 'Rejuvenate Responsibly', true)
+on conflict (id) do nothing;
+
+create index if not exists rmi_companies_active_idx on public.rmi_companies (active) where active;
+
+-- -----------------------------------------------------------------------------
 -- Who may read the dashboard.
 --
 -- Signing in is not the same as being allowed in. A row here is what grants
@@ -70,6 +113,11 @@ create table if not exists public.rmi_admins (
   id          uuid primary key references auth.users (id) on delete cascade,
   email       text not null,
   full_name   text,
+  -- Which company they work for. A super admin still belongs to one, which is
+  -- the organisation they manage when they switch out of the global view.
+  -- The foreign key is added in the upgrade section below, which runs on every
+  -- path, so it is declared exactly once and ends up named the same either way.
+  company_id  text not null default 'default',
   role        text not null default 'admin',
   -- Email of the owner who added them, and when. Null for a row inserted by
   -- hand, and for anyone added before roles existed.
@@ -122,6 +170,9 @@ create table if not exists public.rmi_assessments (
   payment_method      text,
   paid_at             timestamptz,
   payment_updated_at  timestamptz,
+
+  -- Which company's link this came through, and therefore whose client it is.
+  company_id          text not null default 'default',
 
   -- The organisation's own logo, uploaded while filling in the assessment.
   -- A path inside the rmi-assets bucket, e.g. client-logos/RMI-7F3K2Q.png.
@@ -244,14 +295,15 @@ create index if not exists rmi_reports_status_idx on public.rmi_reports (status)
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.rmi_settings (
-  id          text primary key default 'default' check (id = 'default'),
+  -- One row per company, keyed by its id.
+  id          text primary key default 'default',
   data        jsonb not null default '{}'::jsonb,
   updated_at  timestamptz not null default now(),
   updated_by  text
 );
 
 comment on table public.rmi_settings is
-  'Single row of dashboard settings. Secrets inside data are encrypted by the application.';
+  'One row of dashboard settings per company. Secrets inside data are encrypted by the application.';
 
 -- -----------------------------------------------------------------------------
 -- The house report template
@@ -262,8 +314,8 @@ comment on table public.rmi_settings is
 -- -----------------------------------------------------------------------------
 
 create table if not exists public.rmi_report_templates (
-  -- One template for the firm. The check keeps it that way.
-  id                 text primary key default 'default' check (id = 'default'),
+  -- One template per company, keyed by its id.
+  id                 text primary key default 'default',
 
   -- What an admin is working on. Never used for a real report.
   draft_html         text,
@@ -286,7 +338,7 @@ create table if not exists public.rmi_report_templates (
 );
 
 comment on table public.rmi_report_templates is
-  'Single row holding the letterhead and footer a report is wrapped in, as a draft and as the published version.';
+  'One row per company holding the letterhead and footer its reports are wrapped in, as a draft and as the published version.';
 
 -- -----------------------------------------------------------------------------
 -- Bringing an older project up to date
@@ -298,9 +350,50 @@ comment on table public.rmi_report_templates is
 -- project every one of them is a no-op.
 -- -----------------------------------------------------------------------------
 
+-- A project from before companies existed. The default company was seeded
+-- above, so these columns land already pointing at it.
 alter table public.rmi_admins
+  add column if not exists company_id text not null default 'default',
   add column if not exists invited_by text,
   add column if not exists invited_at timestamptz;
+
+alter table public.rmi_assessments
+  add column if not exists company_id text not null default 'default';
+
+-- The foreign keys come after the columns, and only once, so a second run does
+-- not trip over them.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'rmi_admins_company_fk') then
+    alter table public.rmi_admins
+      add constraint rmi_admins_company_fk foreign key (company_id)
+      references public.rmi_companies (id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'rmi_assessments_company_fk') then
+    alter table public.rmi_assessments
+      add constraint rmi_assessments_company_fk foreign key (company_id)
+      references public.rmi_companies (id);
+  end if;
+end $$;
+
+-- Settings and the report template were pinned to one row by a check
+-- constraint. They are now keyed by company, so the constraint goes and the row
+-- that is already there belongs to the default company, which is what its key
+-- already says. Nothing is written; only the rule about what may be written.
+alter table public.rmi_settings drop constraint if exists rmi_settings_id_check;
+alter table public.rmi_report_templates drop constraint if exists rmi_report_templates_id_check;
+
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'rmi_settings_company_fk') then
+    alter table public.rmi_settings
+      add constraint rmi_settings_company_fk foreign key (id)
+      references public.rmi_companies (id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'rmi_report_templates_company_fk') then
+    alter table public.rmi_report_templates
+      add constraint rmi_report_templates_company_fk foreign key (id)
+      references public.rmi_companies (id) on delete cascade;
+  end if;
+end $$;
 
 -- The role column needs care. Adding a NOT NULL column with a default gives
 -- every existing row that default, and the people already in this table are the
@@ -313,10 +406,23 @@ alter table public.rmi_admins
 
 alter table public.rmi_admins alter column role set default 'admin';
 
-do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'rmi_admins_role_check') then
+-- Three roles now, so a check written when there were two has to be replaced.
+-- Dropping and adding a check touches no row; it only changes what may be
+-- written from here on.
+do $$
+declare
+  current_def text;
+begin
+  select pg_get_constraintdef(oid) into current_def
+  from pg_constraint where conname = 'rmi_admins_role_check';
+
+  if current_def is null then
     alter table public.rmi_admins
-      add constraint rmi_admins_role_check check (role in ('owner', 'admin'));
+      add constraint rmi_admins_role_check check (role in ('super', 'owner', 'admin'));
+  elsif current_def not like '%super%' then
+    alter table public.rmi_admins drop constraint rmi_admins_role_check;
+    alter table public.rmi_admins
+      add constraint rmi_admins_role_check check (role in ('super', 'owner', 'admin'));
   end if;
 end $$;
 
@@ -366,9 +472,11 @@ alter table public.rmi_reports
 create index if not exists rmi_assessments_sample_idx on public.rmi_assessments (sample) where sample;
 
 create index if not exists rmi_admins_role_idx on public.rmi_admins (role);
+create index if not exists rmi_admins_company_idx on public.rmi_admins (company_id);
+create index if not exists rmi_assessments_company_idx on public.rmi_assessments (company_id);
 
 comment on column public.rmi_admins.role is
-  'owner manages the team; admin does everything else. The last owner cannot be removed.';
+  'super sees every company and configures the installation; owner manages one company''s team; admin does everything else. The last owner of a company cannot be removed.';
 
 comment on column public.rmi_reports.pdf_path is
   'The PDF as it was issued. Reports are valid for one year from sent_at; after that this file still downloads but is stamped as expired on the way out.';
@@ -392,6 +500,11 @@ create trigger rmi_assessments_touch
   before update on public.rmi_assessments
   for each row execute function public.rmi_touch_updated_at();
 
+drop trigger if exists rmi_companies_touch on public.rmi_companies;
+create trigger rmi_companies_touch
+  before update on public.rmi_companies
+  for each row execute function public.rmi_touch_updated_at();
+
 drop trigger if exists rmi_report_templates_touch on public.rmi_report_templates;
 create trigger rmi_report_templates_touch
   before update on public.rmi_report_templates
@@ -409,6 +522,7 @@ create trigger rmi_report_templates_touch
 -- at all, so only the service role reaches them.
 -- -----------------------------------------------------------------------------
 
+alter table public.rmi_companies             enable row level security;
 alter table public.rmi_admins                enable row level security;
 alter table public.rmi_assessments           enable row level security;
 alter table public.rmi_shares                enable row level security;
@@ -416,6 +530,13 @@ alter table public.rmi_stakeholder_responses enable row level security;
 alter table public.rmi_reports               enable row level security;
 alter table public.rmi_settings              enable row level security;
 alter table public.rmi_report_templates      enable row level security;
+
+-- A signed-in admin may read the companies, which is how the dashboard knows
+-- its own name. Writing is the service role's job, behind the super admin check
+-- in the application.
+drop policy if exists rmi_companies_admin_read on public.rmi_companies;
+create policy rmi_companies_admin_read on public.rmi_companies
+  for select to authenticated using (public.rmi_is_admin());
 
 drop policy if exists rmi_admins_self_read on public.rmi_admins;
 create policy rmi_admins_self_read on public.rmi_admins
@@ -455,12 +576,12 @@ create policy rmi_reports_admin_write on public.rmi_reports
 -- writes with the service role, which is exempt from all of this.
 -- -----------------------------------------------------------------------------
 
-revoke all on public.rmi_admins, public.rmi_assessments, public.rmi_shares,
-               public.rmi_stakeholder_responses, public.rmi_reports
+revoke all on public.rmi_companies, public.rmi_admins, public.rmi_assessments,
+               public.rmi_shares, public.rmi_stakeholder_responses, public.rmi_reports
   from anon;
 
-grant select on public.rmi_admins, public.rmi_assessments, public.rmi_shares,
-                public.rmi_stakeholder_responses, public.rmi_reports
+grant select on public.rmi_companies, public.rmi_admins, public.rmi_assessments,
+                public.rmi_shares, public.rmi_stakeholder_responses, public.rmi_reports
   to authenticated;
 
 grant update (status, markdown, edited_at, edited_by, issued_at, issued_by)
@@ -503,7 +624,11 @@ select
   coalesce(r.status, 'none')::rmi_report_status         as report_status,
   r.generated_at                                        as report_generated_at,
   r.edited_at                                           as report_edited_at,
-  r.sent_at                                             as report_sent_at
+  r.sent_at                                             as report_sent_at,
+  -- Appended rather than placed beside the id: `create or replace view` can add
+  -- a column at the end but cannot insert one in the middle, so putting it
+  -- anywhere else would fail on a project that already has this view.
+  a.company_id
 from public.rmi_assessments a
 left join public.rmi_reports r on r.assessment_id = a.id;
 
@@ -527,16 +652,41 @@ values ('rmi-assets', 'rmi-assets', false)
 on conflict (id) do nothing;
 
 -- -----------------------------------------------------------------------------
+-- The first super admin
+--
+-- Runs only when nobody is a super admin yet, so it sets the installation up
+-- and never overrides a decision made later from the dashboard. If her account
+-- does not exist yet, this does nothing and can be re-run once it does.
+-- -----------------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (select 1 from public.rmi_admins where role = 'super') then
+    update public.rmi_admins
+      set role = 'super'
+      where lower(email) = 'caroline.muito@test.com';
+  end if;
+end $$;
+
+-- -----------------------------------------------------------------------------
 -- Granting yourself access
 --
 -- Create the account first (Authentication > Users > Add user), then run this
 -- once. The first person has to be an owner, because an owner is the only one
 -- who can add anybody else.
 --
---   insert into public.rmi_admins (id, email, full_name, role)
---   select id, email, 'Your Name', 'owner'
+--   insert into public.rmi_admins (id, email, full_name, role, company_id)
+--   select id, email, 'Your Name', 'owner', 'default'
 --   from auth.users where email = 'you@example.com'
 --   on conflict (id) do update set role = 'owner';
 --
 -- After that, everyone else is added from Settings > Team in the dashboard.
+--
+-- The super admin sees every company and holds the keys the installation
+-- shares. The first one is promoted below, if her account exists and nobody is
+-- a super admin yet; after that, a super admin can make others from the
+-- dashboard. To promote someone by hand:
+--
+--   update public.rmi_admins set role = 'super'
+--   where email = 'their.address@example.com';
 -- -----------------------------------------------------------------------------

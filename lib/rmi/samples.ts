@@ -471,7 +471,11 @@ export const SAMPLE_CASES: SampleCase[] = cases.map((c, i) => ({
   covers: c.covers,
 }));
 
-export function buildSamples(now: Date = new Date()): {
+export function buildSamples(
+  now: Date = new Date(),
+  /** Whose dashboard loaded them, so they appear only there. */
+  companyId = "default",
+): {
   assessments: Assessment[];
   responses: StakeholderResponse[];
 } {
@@ -517,6 +521,7 @@ export function buildSamples(now: Date = new Date()): {
 
     const record: Assessment = {
       id,
+      companyId,
       token: `sample-token-${n}`,
       status: c.status,
       profile: c.profile,

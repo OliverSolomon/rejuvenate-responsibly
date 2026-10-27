@@ -37,6 +37,14 @@ export const editReport: typeof file.editReport = (...a) => impl().editReport(..
 export const markReportSent: typeof file.markReportSent = (...a) => impl().markReportSent(...a);
 export const setReportPdf: typeof file.setReportPdf = (...a) => impl().setReportPdf(...a);
 
+/* companies */
+
+export const listCompanies: typeof file.listCompanies = () => impl().listCompanies();
+export const companyById: typeof file.companyById = (...a) => impl().companyById(...a);
+export const companyBySlug: typeof file.companyBySlug = (...a) => impl().companyBySlug(...a);
+export const createCompany: typeof file.createCompany = (...a) => impl().createCompany(...a);
+export const updateCompany: typeof file.updateCompany = (...a) => impl().updateCompany(...a);
+
 /* the report template and the organisation's own logo */
 
 export const readTemplate: typeof file.readTemplate = () => impl().readTemplate();

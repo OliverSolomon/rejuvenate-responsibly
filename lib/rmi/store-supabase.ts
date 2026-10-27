@@ -7,6 +7,7 @@ import type {
 } from "./scoring";
 import type {
   Assessment,
+  Company,
   InviteDelivery,
   Payment,
   PaymentStatus,
@@ -133,6 +134,7 @@ type AssessmentRow = {
   updated_at: string;
   submitted_at: string | null;
   sample: boolean;
+  company_id: string;
   client_logo: string | null;
   rmi_shares?: ShareRow[] | null;
   rmi_reports?: ReportRow | ReportRow[] | null;
@@ -193,6 +195,7 @@ function toAssessment(r: AssessmentRow): Assessment {
   const reportRow = Array.isArray(r.rmi_reports) ? r.rmi_reports[0] : r.rmi_reports;
   const a: Assessment = {
     id: r.id,
+    companyId: r.company_id || "default",
     token: r.token,
     status: r.status,
     profile: {
@@ -252,6 +255,7 @@ function assessmentRow(a: Assessment) {
     updated_at: a.updatedAt,
     submitted_at: a.submittedAt,
     sample: Boolean(a.sample),
+    company_id: a.companyId || "default",
     client_logo: a.clientLogo ?? null,
   };
 }
@@ -326,12 +330,16 @@ async function insertChunks(op: string, table: string, rows: object[]): Promise<
 /* assessments                                                                */
 /* -------------------------------------------------------------------------- */
 
-export async function createAssessment(profile: Profile): Promise<Assessment> {
+export async function createAssessment(
+  profile: Profile,
+  companyId = "default",
+): Promise<Assessment> {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const { data, error } = await db()
       .from("rmi_assessments")
       .insert({
         id: shortCode(),
+        company_id: companyId,
         token: newSecret(),
         organisation: profile.organisation,
         contact_name: profile.contactName,
@@ -549,6 +557,109 @@ export async function setClientLogo(
 }
 
 /* -------------------------------------------------------------------------- */
+/* companies                                                                  */
+/* -------------------------------------------------------------------------- */
+
+type CompanyRow = {
+  id: string;
+  slug: string;
+  name: string;
+  is_default: boolean;
+  active: boolean;
+  created_at: string;
+  created_by: string | null;
+};
+
+function toCompany(r: CompanyRow): Company {
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    isDefault: r.is_default,
+    active: r.active,
+    createdAt: r.created_at,
+    ...(r.created_by ? { createdBy: r.created_by } : {}),
+  };
+}
+
+export async function listCompanies(): Promise<Company[]> {
+  const { data, error } = await db()
+    .from("rmi_companies")
+    .select("*")
+    .order("is_default", { ascending: false })
+    .order("name", { ascending: true });
+  if (error) fail("read companies", error);
+  return (data as CompanyRow[]).map(toCompany);
+}
+
+export async function createCompany(input: {
+  id: string;
+  slug: string;
+  name: string;
+  createdBy: string;
+}): Promise<Company | undefined> {
+  const { data, error } = await db()
+    .from("rmi_companies")
+    .insert({
+      id: input.id,
+      slug: input.slug,
+      name: input.name,
+      created_by: input.createdBy,
+    })
+    .select("*")
+    .single();
+  // A taken id or slug is the caller's problem to report, not a failure here.
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) return undefined;
+    fail("create company", error);
+  }
+  return toCompany(data as CompanyRow);
+}
+
+export async function updateCompany(
+  id: string,
+  patch: { name?: string; slug?: string; active?: boolean },
+): Promise<Company | undefined> {
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.slug !== undefined) row.slug = patch.slug;
+  if (patch.active !== undefined) row.active = patch.active;
+  if (Object.keys(row).length === 0) return companyById(id);
+
+  const { data, error } = await db()
+    .from("rmi_companies")
+    .update(row)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION) return undefined;
+    fail("update company", error);
+  }
+  return data ? toCompany(data as CompanyRow) : undefined;
+}
+
+export async function companyById(id: string): Promise<Company | undefined> {
+  const { data, error } = await db()
+    .from("rmi_companies")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) fail("read company", error);
+  return data ? toCompany(data as CompanyRow) : undefined;
+}
+
+export async function companyBySlug(slug: string): Promise<Company | undefined> {
+  const { data, error } = await db()
+    .from("rmi_companies")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) fail("read company", error);
+  return data ? toCompany(data as CompanyRow) : undefined;
+}
+
+/* -------------------------------------------------------------------------- */
 /* the report template                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -585,11 +696,11 @@ function toTemplate(r: TemplateRow | null): ReportTemplate {
   return template;
 }
 
-export async function readTemplate(): Promise<ReportTemplate> {
+export async function readTemplate(companyId = "default"): Promise<ReportTemplate> {
   const { data, error } = await db()
     .from("rmi_report_templates")
     .select("*")
-    .eq("id", "default")
+    .eq("id", companyId)
     .maybeSingle();
   if (error) fail("read report template", error);
   return toTemplate((data as TemplateRow | null) ?? null);
@@ -599,12 +710,13 @@ export async function saveTemplateDraft(
   html: string,
   doc: string | null,
   by: string,
+  companyId = "default",
 ): Promise<ReportTemplate> {
   const { error } = await db()
     .from("rmi_report_templates")
     .upsert(
       {
-        id: "default",
+        id: companyId,
         draft_html: html,
         draft_doc: doc,
         draft_updated_at: new Date().toISOString(),
@@ -613,12 +725,15 @@ export async function saveTemplateDraft(
       { onConflict: "id" },
     );
   if (error) fail("save report template draft", error);
-  return readTemplate();
+  return readTemplate(companyId);
 }
 
 /** Move the draft into place as the live template and bump the version. */
-export async function publishTemplate(by: string): Promise<ReportTemplate | undefined> {
-  const current = await readTemplate();
+export async function publishTemplate(
+  by: string,
+  companyId = "default",
+): Promise<ReportTemplate | undefined> {
+  const current = await readTemplate(companyId);
   if (!current.draft) return undefined;
 
   const { error } = await db()
@@ -630,13 +745,13 @@ export async function publishTemplate(by: string): Promise<ReportTemplate | unde
       published_by: by,
       version: current.version + 1,
     })
-    .eq("id", "default");
+    .eq("id", companyId);
   if (error) fail("publish report template", error);
-  return readTemplate();
+  return readTemplate(companyId);
 }
 
 /** Throw the draft away. What is published keeps serving reports. */
-export async function discardTemplateDraft(): Promise<ReportTemplate> {
+export async function discardTemplateDraft(companyId = "default"): Promise<ReportTemplate> {
   const { error } = await db()
     .from("rmi_report_templates")
     .update({
@@ -645,9 +760,9 @@ export async function discardTemplateDraft(): Promise<ReportTemplate> {
       draft_updated_at: null,
       draft_updated_by: null,
     })
-    .eq("id", "default");
+    .eq("id", companyId);
   if (error) fail("discard report template draft", error);
-  return readTemplate();
+  return readTemplate(companyId);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -858,11 +973,11 @@ export async function listStakeholderResponses(
 /* settings                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export async function readSettings(): Promise<StoredSettings> {
+export async function readSettings(companyId = "default"): Promise<StoredSettings> {
   const { data, error } = await db()
     .from("rmi_settings")
     .select("data")
-    .eq("id", "default")
+    .eq("id", companyId)
     .maybeSingle();
   if (error) fail("read settings", error);
   return (data?.data as StoredSettings | undefined) ?? {};
@@ -870,12 +985,13 @@ export async function readSettings(): Promise<StoredSettings> {
 
 export async function changeSettings(
   fn: (current: StoredSettings) => StoredSettings,
+  companyId = "default",
 ): Promise<StoredSettings> {
-  const next = fn(await readSettings());
+  const next = fn(await readSettings(companyId));
   const { error } = await db()
     .from("rmi_settings")
     .upsert({
-      id: "default",
+      id: companyId,
       data: next,
       updated_at: new Date().toISOString(),
       updated_by: next.updatedBy ?? null,

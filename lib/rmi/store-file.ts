@@ -10,6 +10,7 @@ import {
   type InviteDelivery,
   type Payment,
   type Profile,
+  type Company,
   type Report,
   type ReportTemplate,
   type Share,
@@ -26,14 +27,25 @@ import {
  * is only suitable with RMI_DATA_DIR on a mounted volume.
  */
 
+/** Mirrors the default company in the migration. */
+const DEFAULT_COMPANY = "default";
+
 const DATA_DIR = process.env.RMI_DATA_DIR ?? path.join(process.cwd(), ".data");
 const FILE = path.join(DATA_DIR, "rmi.json");
 
 type Db = {
   assessments: Assessment[];
   stakeholderResponses: StakeholderResponse[];
+  /** The default company's settings, which is all a single file install has. */
   settings: StoredSettings;
   template?: ReportTemplate;
+  /**
+   * Other companies' settings and templates, keyed by company. The default
+   * company keeps the two fields above so an existing file still reads.
+   */
+  companySettings?: Record<string, StoredSettings>;
+  companyTemplates?: Record<string, ReportTemplate>;
+  companies?: Company[];
 };
 
 async function read(): Promise<Db> {
@@ -45,6 +57,9 @@ async function read(): Promise<Db> {
       stakeholderResponses: parsed.stakeholderResponses ?? [],
       settings: parsed.settings ?? {},
       ...(parsed.template ? { template: parsed.template } : {}),
+      ...(parsed.companySettings ? { companySettings: parsed.companySettings } : {}),
+      ...(parsed.companyTemplates ? { companyTemplates: parsed.companyTemplates } : {}),
+      ...(parsed.companies ? { companies: parsed.companies } : {}),
     };
   } catch {
     return { assessments: [], stakeholderResponses: [], settings: {} };
@@ -82,7 +97,10 @@ function transact<T>(fn: (db: Db) => Promise<T> | T): Promise<T> {
 /* assessments                                                                */
 /* -------------------------------------------------------------------------- */
 
-export async function createAssessment(profile: Profile): Promise<Assessment> {
+export async function createAssessment(
+  profile: Profile,
+  companyId = DEFAULT_COMPANY,
+): Promise<Assessment> {
   return transact((db) => {
     let id = shortCode();
     while (db.assessments.some((x) => x.id === id)) id = shortCode();
@@ -90,6 +108,7 @@ export async function createAssessment(profile: Profile): Promise<Assessment> {
     const now = new Date().toISOString();
     const record: Assessment = {
       id,
+      companyId,
       token: newSecret(),
       status: "draft",
       profile,
@@ -343,17 +362,106 @@ export async function saveStakeholderResponse(input: {
 /* settings and sample data                                                   */
 /* -------------------------------------------------------------------------- */
 
-export async function readSettings(): Promise<StoredSettings> {
-  return (await read()).settings;
+export async function readSettings(companyId = DEFAULT_COMPANY): Promise<StoredSettings> {
+  const db = await read();
+  if (companyId === DEFAULT_COMPANY) return db.settings;
+  return db.companySettings?.[companyId] ?? {};
 }
 
-/** Apply a change to the stored settings and return what is saved. */
+/** Apply a change to one company's settings and return what is saved. */
 export async function changeSettings(
   fn: (current: StoredSettings) => StoredSettings,
+  companyId = DEFAULT_COMPANY,
 ): Promise<StoredSettings> {
   return transact((db) => {
-    db.settings = fn(db.settings);
-    return db.settings;
+    if (companyId === DEFAULT_COMPANY) {
+      db.settings = fn(db.settings);
+      return db.settings;
+    }
+    const next = fn(db.companySettings?.[companyId] ?? {});
+    db.companySettings = { ...db.companySettings, [companyId]: next };
+    return next;
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* companies                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** The firm that owns the installation, present even in an empty file. */
+const DEFAULT_COMPANY_ROW: Company = {
+  id: DEFAULT_COMPANY,
+  slug: "rejuvenate",
+  name: "Rejuvenate Responsibly",
+  isDefault: true,
+  active: true,
+  createdAt: new Date(0).toISOString(),
+};
+
+function allCompanies(db: Db): Company[] {
+  const stored = db.companies ?? [];
+  return stored.some((c) => c.id === DEFAULT_COMPANY)
+    ? stored
+    : [DEFAULT_COMPANY_ROW, ...stored];
+}
+
+export async function listCompanies(): Promise<Company[]> {
+  const companies = allCompanies(await read());
+  return [...companies].sort(
+    (a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name),
+  );
+}
+
+export async function companyById(id: string): Promise<Company | undefined> {
+  return (await listCompanies()).find((c) => c.id === id);
+}
+
+export async function companyBySlug(slug: string): Promise<Company | undefined> {
+  return (await listCompanies()).find((c) => c.slug === slug);
+}
+
+export async function createCompany(input: {
+  id: string;
+  slug: string;
+  name: string;
+  createdBy: string;
+}): Promise<Company | undefined> {
+  return transact((db) => {
+    const companies = allCompanies(db);
+    if (companies.some((c) => c.id === input.id || c.slug === input.slug)) return undefined;
+    const company: Company = {
+      id: input.id,
+      slug: input.slug,
+      name: input.name,
+      isDefault: false,
+      active: true,
+      createdAt: new Date().toISOString(),
+      createdBy: input.createdBy,
+    };
+    db.companies = [...companies, company];
+    return company;
+  });
+}
+
+export async function updateCompany(
+  id: string,
+  patch: { name?: string; slug?: string; active?: boolean },
+): Promise<Company | undefined> {
+  return transact((db) => {
+    const companies = allCompanies(db);
+    const found = companies.find((c) => c.id === id);
+    if (!found) return undefined;
+    if (patch.slug && companies.some((c) => c.slug === patch.slug && c.id !== id)) {
+      return undefined;
+    }
+    const next: Company = {
+      ...found,
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
+      ...(patch.active !== undefined ? { active: patch.active } : {}),
+    };
+    db.companies = companies.map((c) => (c.id === id ? next : c));
+    return next;
   });
 }
 
@@ -361,18 +469,34 @@ export async function changeSettings(
 /* the report template                                                        */
 /* -------------------------------------------------------------------------- */
 
-export async function readTemplate(): Promise<ReportTemplate> {
-  return (await read()).template ?? { version: 0 };
+export async function readTemplate(companyId = DEFAULT_COMPANY): Promise<ReportTemplate> {
+  const db = await read();
+  if (companyId === DEFAULT_COMPANY) return db.template ?? { version: 0 };
+  return db.companyTemplates?.[companyId] ?? { version: 0 };
+}
+
+/** One place that reads and writes whichever company's template is wanted. */
+function templateOf(db: Db, companyId: string): ReportTemplate {
+  return companyId === DEFAULT_COMPANY
+    ? (db.template ?? { version: 0 })
+    : (db.companyTemplates?.[companyId] ?? { version: 0 });
+}
+
+function putTemplate(db: Db, companyId: string, next: ReportTemplate): ReportTemplate {
+  if (companyId === DEFAULT_COMPANY) db.template = next;
+  else db.companyTemplates = { ...db.companyTemplates, [companyId]: next };
+  return next;
 }
 
 export async function saveTemplateDraft(
   html: string,
   doc: string | null,
   by: string,
+  companyId = DEFAULT_COMPANY,
 ): Promise<ReportTemplate> {
   return transact((db) => {
-    const current = db.template ?? { version: 0 };
-    db.template = {
+    const current = templateOf(db, companyId);
+    return putTemplate(db, companyId, {
       ...current,
       draft: {
         html,
@@ -380,17 +504,19 @@ export async function saveTemplateDraft(
         ...(doc ? { doc } : {}),
         ...(by ? { by } : {}),
       },
-    };
-    return db.template;
+    });
   });
 }
 
 /** Move the draft into place as the live template and bump the version. */
-export async function publishTemplate(by: string): Promise<ReportTemplate | undefined> {
+export async function publishTemplate(
+  by: string,
+  companyId = DEFAULT_COMPANY,
+): Promise<ReportTemplate | undefined> {
   return transact((db) => {
-    const current = db.template;
-    if (!current?.draft) return undefined;
-    db.template = {
+    const current = templateOf(db, companyId);
+    if (!current.draft) return undefined;
+    return putTemplate(db, companyId, {
       version: current.version + 1,
       draft: current.draft,
       published: {
@@ -399,19 +525,19 @@ export async function publishTemplate(by: string): Promise<ReportTemplate | unde
         ...(current.draft.doc ? { doc: current.draft.doc } : {}),
         ...(by ? { by } : {}),
       },
-    };
-    return db.template;
+    });
   });
 }
 
 /** Throw the draft away. What is published keeps serving reports. */
-export async function discardTemplateDraft(): Promise<ReportTemplate> {
+export async function discardTemplateDraft(
+  companyId = DEFAULT_COMPANY,
+): Promise<ReportTemplate> {
   return transact((db) => {
-    const current = db.template ?? { version: 0 };
+    const current = templateOf(db, companyId);
     const next: ReportTemplate = { version: current.version };
     if (current.published) next.published = current.published;
-    db.template = next;
-    return next;
+    return putTemplate(db, companyId, next);
   });
 }
 

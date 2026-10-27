@@ -30,7 +30,11 @@ export async function createClient() {
   });
 }
 
-export type TeamRole = "owner" | "admin";
+/**
+ * `super` is the one account that sees every company and holds the keys the
+ * whole installation shares. Other admins cannot see that the role exists.
+ */
+export type TeamRole = "super" | "owner" | "admin";
 
 export type DashboardUser = {
   id: string;
@@ -38,6 +42,8 @@ export type DashboardUser = {
   name: string | null;
   /** Owners manage the team; admins do everything else. */
   role: TeamRole;
+  /** Which company they work for. */
+  companyId: string;
 };
 
 /**
@@ -60,7 +66,7 @@ export async function getDashboardUser(): Promise<DashboardUser | null> {
 
     const { data, error } = await supabase
       .from("rmi_admins")
-      .select("id, email, full_name, role")
+      .select("id, email, full_name, role, company_id")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -69,7 +75,9 @@ export async function getDashboardUser(): Promise<DashboardUser | null> {
       id: data.id,
       email: data.email,
       name: data.full_name,
-      role: data.role === "owner" ? "owner" : "admin",
+      // Anything unrecognised falls to the least privileged of the three.
+      role: data.role === "super" ? "super" : data.role === "owner" ? "owner" : "admin",
+      companyId: data.company_id || "default",
     };
   } catch {
     return null;
