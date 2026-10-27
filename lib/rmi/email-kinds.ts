@@ -25,6 +25,12 @@ export const EMAIL_KINDS = [
     description: "The note an admin sends when stakeholder invitations did not get through.",
   },
   {
+    id: "team",
+    label: "Team invitations",
+    description:
+      "The link a new dashboard user follows to choose their password. Switching this off leaves setting passwords by hand as the only way to add someone.",
+  },
+  {
     id: "enquiry",
     label: "Contact form enquiries",
     description: "Messages from the website contact form, delivered to the contact inbox.",

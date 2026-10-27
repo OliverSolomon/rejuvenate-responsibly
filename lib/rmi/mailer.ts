@@ -240,3 +240,40 @@ export function reportReadyEmail(opts: {
   };
 }
 
+/**
+ * The invitation a new dashboard user receives.
+ *
+ * It carries one link, good once, that signs them in long enough to choose a
+ * password. Nothing about the dashboard is explained here beyond what they need
+ * to get in; the person who added them will have said the rest.
+ */
+export function teamInviteEmail(opts: {
+  /** Who added them, so the email is not from nobody. */
+  invitedBy: string;
+  link: string;
+  /** Returning to an account that already exists reads differently. */
+  returning: boolean;
+}): { subject: string; text: string } {
+  const subject = opts.returning
+    ? "Set a new password for the Rate My Impact dashboard"
+    : "You have been added to the Rate My Impact dashboard";
+
+  const opening = opts.returning
+    ? `${opts.invitedBy} has asked us to send you a new link for the Rate My Impact dashboard.`
+    : `${opts.invitedBy} has added you to the Rate My Impact dashboard, where Rejuvenate Responsibly reads the assessments clients have submitted and the reports written from them.`;
+
+  const text = [
+    opening,
+    "",
+    "Open this link to choose your password:",
+    opts.link,
+    "",
+    "The link works once and expires in 24 hours. If it has run out, ask whoever added you to send another.",
+    "",
+    "After that you sign in with your email address and the password you chose.",
+    "",
+    "If you were not expecting this, you can ignore it: the link alone does not let anyone else in.",
+  ].join("\n");
+
+  return { subject, text };
+}

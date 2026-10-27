@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { pageMeta } from "@/lib/seo";
+import Link from "next/link";
 import { BrandPanel } from "@/components/dashboard/brand-panel";
 import { SamplesPanel } from "@/components/dashboard/samples-panel";
 import { SettingsForm } from "@/components/dashboard/settings-form";
@@ -73,6 +74,25 @@ export default async function SettingsPage() {
               version: template.version,
             }}
           />
+        )}
+        {view && (
+          <section className="rounded-card border border-forest-900/10 bg-bone-50 p-6 sm:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="display text-[1.125rem]">Team</h2>
+                <p className="mt-2 max-w-[56ch] text-[0.875rem] leading-relaxed text-forest-900/60">
+                  Who can open the dashboard, and how they get in. Owners add and remove people;
+                  admins do everything else.
+                </p>
+              </div>
+              <Link
+                href="/dashboard/settings/team"
+                className="rounded-full bg-forest-900 px-5 py-2.5 text-[0.8125rem] font-medium text-bone-50 transition hover:bg-forest-700"
+              >
+                Manage the team
+              </Link>
+            </div>
+          </section>
         )}
         {view && <SamplesPanel cases={SAMPLE_CASES} loaded={loaded} />}
       </div>

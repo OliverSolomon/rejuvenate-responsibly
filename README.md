@@ -31,7 +31,8 @@ app/
     report/                    the generated report, on letterhead
     glossary/                  definitions and consistency checks
   dashboard/                   admin: analytics, responses, report editing
-  signin/                      admin sign-in, email and password or Google
+  signin/                      admin sign-in, email and password
+  auth/confirm/                where an invitation link is verified
   auth/callback/               Supabase OAuth return
   api/
     dashboard/report/[id]      saves an admin's edit of a report
@@ -65,6 +66,8 @@ lib/
   rmi/report.ts                drafting prompt and the two-pass generation
   rmi/markdown.ts              renders the generated report
   rmi/dashboard.ts             read models behind the dashboard views
+  rmi/team.ts                  who can use the dashboard, and the rules for it
+  rmi/team-invite.ts           turns an invitation into a link and emails it
   rmi/template.ts              the report template, placeholders and merging
   rmi/compose.ts               builds the document: template plus report
   rmi/files.ts                 uploads, in Supabase Storage or on disk
@@ -207,10 +210,11 @@ insert into rmi_admins (id, email, full_name)
 select id, email, 'Your Name' from auth.users where email = 'you@example.com';
 ```
 
-Authentication is set up in the Supabase dashboard, not here: turn on email and
-password, and add Google under Authentication > Providers with
-`https://your-domain/auth/callback` as the redirect URL. The sign-in page
-offers both.
+Authentication is email and password, and nothing else. There is no social
+sign-in and no magic link: the only thing to turn on in the Supabase dashboard
+is the email provider, which is on by default. Everyone after the first person
+is added from the dashboard itself, so Supabase's own email templates and SMTP
+settings are never used. See "The team" below.
 
 Row level security is written so the browser key can read nothing on its own.
 `anon` is revoked outright, every policy requires a row in `rmi_admins`, and
@@ -220,6 +224,58 @@ inserted by the server, never by a browser.
 The dashboard still reads `lib/rmi/store.ts`, the JSON store the public site
 writes to, so it shows live work today. The migration is the shape to move to;
 when that happens, only the three functions in `lib/rmi/dashboard.ts` change.
+
+## The team
+
+The dashboard has no sign-up and no social sign-in. Access is a row in
+`rmi_admins`, and the only way to get one is for an owner to add you from
+Settings > Team.
+
+There are two levels. An **owner** adds and removes people and changes roles.
+An **admin** does everything else: reading responses, writing and sending
+reports, changing the template and the settings. Everyone already in
+`rmi_admins` when `0005_team_roles.sql` ran became an owner, since they are the
+people who set this up; anyone added afterwards is an admin unless an owner says
+otherwise.
+
+Two rules stop a team locking itself out, and they live in `lib/rmi/team.ts` as
+decisions over the list rather than database calls, so they can be read and
+tested on their own: nobody can remove themselves, and the last owner can be
+neither removed nor demoted. The routes check for an owner as well, since a
+route can be called directly and hiding a button is not a permission.
+
+### Two ways to let someone in
+
+**Email them a link.** They get a message through Mailtrap carrying a link good
+once, which signs them in long enough to choose their own password. The link is
+verified by `/auth/confirm` rather than by Supabase's hosted page, which is why
+the invitation goes out through the same provider and the same switch as every
+other message the site sends. Supabase's own email templates and SMTP settings
+are never used, and "Team invitations" in the email settings governs it.
+
+**Set the password yourself.** An owner types one in and tells the person what
+it is. Nothing is emailed, deliberately: an emailed password is a password in
+two places. This is also the way in when email is switched off entirely. The
+person can change it afterwards from `/dashboard/set-password`, and that change
+goes straight from their browser to Supabase, so no route of ours ever sees a
+password being set by its owner.
+
+An invitation that was never used can be resent, which is also the way to help
+someone who has forgotten their password: a fresh link lets them set a new one.
+
+### Taking access away
+
+Removing someone deletes their `rmi_admins` row, so access ends at once. Their
+Supabase account is left alone on purpose: adding them back is one step, and
+nothing recorded against their id loses its reference. The list shows whether
+each person has signed in yet, so an invitation nobody acted on is visible
+rather than assumed.
+
+Managing the team needs `SUPABASE_SERVICE_ROLE_KEY` on the server, because
+creating an account and setting a password are admin API calls the browser key
+cannot make, and the sign-in dates come from `auth.users`, which row level
+security does not reach. Without the key the page still lists who is there and
+says plainly that nobody new can be created.
 
 ## Sending the final report
 
@@ -406,7 +462,7 @@ says what it did.
 | --- | --- |
 | `NEXT_PUBLIC_SITE_URL` | Base URL used to build stakeholder survey links |
 | `RMI_SETTINGS_KEY` | Master key for secrets saved from the dashboard. Without it only the environment values work |
-| `SUPABASE_SERVICE_ROLE_KEY` | Switches storage to Supabase. Server only; bypasses row level security |
+| `SUPABASE_SERVICE_ROLE_KEY` | Switches storage to Supabase, and is what lets owners create accounts. Server only; bypasses row level security |
 | `RMI_STORAGE` | `file` forces the local file, `supabase` insists on Supabase. Unset picks by the key |
 | `RMI_REQUIRE_PAYMENT` | `false` lets people start without paying, for testing. The dashboard switch overrides it |
 | `PESAPAL_CONSUMER_KEY` | Opens Pesapal orders. Without it the Pay button says card payment is off |
@@ -500,10 +556,10 @@ the container, would be sturdier still.
 4. **Images.** Everything in `public/images` is a generated placeholder, marked
    as such on the page. Drop real photographs in at the same filenames and the
    captions disappear on their own (remove the `swap` prop on `<Media>`).
-5. **The dashboard.** Run the migration in a Supabase project, turn on email
-   and password and Google sign-in, put the project URL and publishable key in
-   the environment, and insert your own row into `rmi_admins`. Nobody can reach
-   `/dashboard` until that row exists.
+5. **The dashboard.** Run the migrations in a Supabase project, put the project
+   URL and publishable key in the environment, and insert your own row into
+   `rmi_admins`. Nobody can reach `/dashboard` until that row exists, and the
+   first row is an owner, who adds everyone else from Settings > Team.
 6. **Report generation.** Set `OPENROUTER_API_KEY` (environment or dashboard
    Settings). Model slugs drift, so check the two defaults still resolve on
    openrouter.ai/models before launch. If the server environment still pins an
