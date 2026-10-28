@@ -19,7 +19,7 @@ export async function Cta() {
               tell you honestly whether we are the right people for it.
             </p>
             <div className="flex flex-wrap gap-3">
-              <ButtonLink href="/rmi#start" variant="primary" size="lg">
+              <ButtonLink href="/rmi" variant="primary" size="lg">
                 Start the assessment
               </ButtonLink>
               <ButtonLink href="/contact" variant="ghost" size="lg">

@@ -52,7 +52,7 @@ export function Hero() {
                 allocation and disclosure, with evidence rigorous enough to publish.
               </p>
               <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-                <ButtonLink href="/rmi#start" variant="lime" size="lg">
+                <ButtonLink href="/rmi" variant="lime" size="lg">
                   Rate my impact
                 </ButtonLink>
                 <ButtonLink href="/services" variant="dark" size="lg">

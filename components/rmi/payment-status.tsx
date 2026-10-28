@@ -150,7 +150,7 @@ export function PaymentStatus({
           {state === "paid" ? "Start my assessment" : "Open my assessment"}
         </ButtonLink>
         {(state === "failed" || state === "unknown") && (
-          <Button variant="ghost" size="lg" onClick={() => router.push("/rmi#start")}>
+          <Button variant="ghost" size="lg" onClick={() => router.push("/rmi")}>
             Try paying again
           </Button>
         )}

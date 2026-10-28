@@ -129,7 +129,7 @@ export function SiteHeader({ whatsapp }: { whatsapp?: string }) {
                 </a>
 
                 <Link
-                  href="/rmi#start"
+                  href="/rmi"
                   className={`hidden h-10 items-center gap-2.5 rounded-full pl-5 pr-4 text-[0.875rem] font-medium transition-all duration-300 hover:-translate-y-0.5 sm:inline-flex ${
                     overlay
                       ? "bg-forest-950 text-bone-50 hover:bg-forest-900"
@@ -197,7 +197,7 @@ export function SiteHeader({ whatsapp }: { whatsapp?: string }) {
           ))}
         </nav>
         <Link
-          href="/rmi#start"
+          href="/rmi"
           className="mt-auto inline-flex h-13 items-center justify-center rounded-full bg-lime-500 px-6 font-medium text-forest-950"
         >
           Start your assessment

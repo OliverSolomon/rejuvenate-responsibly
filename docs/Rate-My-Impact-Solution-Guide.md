@@ -2,15 +2,15 @@
 title: "Rate My Impact: Solution Guide"
 subtitle: "How the platform works, what it does, and why it was built this way"
 author: "Oliver Wainaina"
-date: "14 October 2026"
+date: "27 October 2026"
 ---
 
 # Rate My Impact: Solution Guide
 
 **Prepared for:** Rejuvenate Responsibly, Nairobi, Kenya
 **Prepared by:** Oliver Wainaina
-**Version:** 1.2
-**Date:** 14 October 2026
+**Version:** 1.3
+**Date:** 27 October 2026
 
 ---
 
@@ -33,10 +33,9 @@ date: "14 October 2026"
 15. Security and privacy
 16. Decisions we made, and why
 17. Known limitations and things to reconcile
-18. Going live: the launch checklist
-19. Everyday tasks: how to
-20. References
-21. Glossary
+18. Everyday tasks: how to
+19. References
+20. Glossary
 - Appendix A: The 53 client questions
 - Appendix B: The 40 stakeholder questions
 - Document history
@@ -49,14 +48,14 @@ This guide describes the **Rate My Impact** platform that Rejuvenate Responsibly
 
 **What it covers**
 
-- Everything a client, a stakeholder and an administrator can do.
+- Everything a client, a stakeholder and each kind of dashboard user (super admin, owner, admin, member) can do.
 - The wording of every automatic email.
 - How scores and reports are produced.
 - Where information is stored and who can see it.
 - The choices made along the way and the reasons for them.
 - The things that are not yet finished, so nobody is surprised.
 
-**Status at the time of writing.** The platform is built and working. Card payments run against Pesapal's test environment until the merchant account is approved for live use. Email delivery depends on the mail account being connected (see Section 18). Anything marked "not yet" below is a deliberate gap, listed again in Section 17.
+**Status at the time of writing.** The platform is built and working. Card payments run against Pesapal's test environment until the merchant account is approved for live use. Email delivery depends on the mail account being connected. Anything marked "not yet" below is a deliberate gap, listed again in Section 17.
 
 ---
 
@@ -72,7 +71,7 @@ Rate My Impact is a sustainability self-assessment with an outside check. An org
 | **The assessment** | The 53-question self-assessment, with a saved reference so people can stop and resume | Clients |
 | **Stakeholder survey** | A 40-question outside view, sent by email | People the client invites |
 | **Report engine** | Writes the consolidated report from the scores and answers | Runs automatically |
-| **Admin dashboard** | Analytics, every submission, report editing and sending, settings | The Rejuvenate team |
+| **Admin dashboard** | Analytics, every submission, report editing and sending, settings, team and companies | Each firm's own people: super admin, owners, admins and members (Section 3.2) |
 
 ### What makes it different
 
@@ -84,14 +83,92 @@ Rate My Impact is a sustainability self-assessment with an outside check. An org
 
 ## 3. The people who use it
 
+There are two groups: the people outside the firm, who reach the platform by private link, and the people inside it, who sign in to the dashboard.
+
+### 3.1 Outside the firm
+
 | Role | Who they are | What they can do | What they never see |
 | --- | --- | --- | --- |
 | **Client** (the submitter) | The person at an organisation who starts the assessment and pays | Answer the questions, save and resume, submit, invite stakeholders, read the report | Individual stakeholder answers |
 | **Stakeholder** | Someone the client invites: a supplier, employee, customer, investor, partner | Answer the 40-question survey once, using their own private link | The client's answers or the report |
-| **Administrator** | A member of the Rejuvenate team on the approved list | View every submission, edit and send reports, see delivery problems, change settings | Nothing is hidden from them; their access is controlled by the approved list |
-| **Rejuvenate** | The firm | Receives website enquiries and enterprise requests | |
+| **Rejuvenate** (the firm) | The company that runs the platform | Receives website enquiries and enterprise requests | |
 
 **Access is by private link, not by account.** Clients and stakeholders do not create accounts or passwords. They are given a reference and a private link by email. The link works like a password: anyone who has it can open that assessment.
+
+### 3.2 Inside the firm: the dashboard roles
+
+More than one company can run on one installation (Section 12.9). Every dashboard user belongs to exactly one company, except the super admin, who answers to the installation. There are four roles.
+
+| Role | Belongs to | Can do | Cannot do |
+| --- | --- | --- | --- |
+| **Super admin** | The installation (their own company is the one that owns it) | Everything. Sees every company at once or steps into one. Sets the keys and template that other companies share, creates and closes companies, marks a company as a sample, decides what each company shares, adds and moves people between companies, makes other super admins | Nothing is withheld. The last super admin cannot be removed or demoted |
+| **Owner** | One company | Everything an admin can, plus adds and removes people in their company and changes their roles. Sets their company's own keys and template when the super admin has switched sharing off | See any other company. See the super admin accounts |
+| **Admin** | One company | Works the company's submissions: reads responses, writes, edits and sends reports, informs submitters, loads and removes the company's sample data, changes the company's settings (country, pricing, branding, email switches, their own keys and template when sharing is off) | Add, remove or change the roles of people. See any other company |
+| **Member** | One company | Looks. Reads the company's analytics, responses, reports and settings, switches Demo and Live for their own screen, closes notices on their own screen | Change anything. Every action that saves, sends, uploads, deletes or generates is refused with a clear message, by the server and not only by hiding the button |
+
+**How a person gets their company.**
+
+- Someone an **owner** adds joins the owner's company automatically.
+- A **super admin** chooses the company when adding someone, and can move a person to another company later, from the Team page.
+- A super admin is never placed in a company's team.
+- Anything the system does not recognise in the role column is treated as **member**, the least privileged, so a mistake can only ever take access away.
+
+**Who sees whom.** The team list of a company never shows the super admin accounts. A company's people cannot see that the role exists.
+
+### 3.2.1 How the roles relate to each other
+
+The four roles form a ladder. Each rung can do everything the one below it can, and adds one thing.
+
+| Rung | Adds to the one below | Reports to |
+| --- | --- | --- |
+| **Member** | Looks at one company's work | The owner or admin of that company |
+| **Admin** | Changes things: submissions, reports, sample data and the company's settings | The owner of that company |
+| **Owner** | Manages the company's team: adds, removes and changes roles of members and admins | The super admin |
+| **Super admin** | Reaches across companies: sees all of them, creates and closes them, places people in them, and holds the shared keys and template | Nobody. It is the installation's own role |
+
+**Super admin and the others.**
+
+- A super admin **is above every company** and answers to none. An owner, admin or member belongs to **one** company and cannot see any other.
+- A super admin **creates the owners**. An owner then runs their own company's people without further help, so the super admin is not needed for day-to-day team changes.
+- A super admin **decides what a company shares** (Section 12.9). While a company shares the installation's payment account, report-writing key and template, its admins have nothing to set up. When the super admin switches a share off, that company's owner and admins take over the matter: they see a set-up banner and must add their own.
+- A super admin can **move a person** between companies and change their role. An owner can change roles only inside their own company, and cannot create a super admin.
+- A super admin **can look through any company's eyes** (account menu, Companies shown) but is saving settings against their own company unless they step into another.
+- Nobody below super admin can see super admin accounts, or knows they are in the team list.
+
+**Owner and admin.**
+
+- An **owner** is an admin who also manages people. Everything an admin can do with submissions, reports and settings, an owner can too.
+- An **admin** cannot add, remove or change anyone, and cannot promote themselves.
+- Neither can reach another company, even if they know its references. Every page and action checks the company first.
+
+**Admin and member.** An admin and a member see the same screens. The difference is that a member's buttons do nothing: the server refuses every save, send, upload, delete or generate from a member, with a message saying so.
+
+**Guard rails that hold the ladder up.** The last super admin cannot be removed or demoted. The last owner of a company cannot be removed or demoted. Nobody can remove or step down themselves. Anything unrecognised is treated as a member.
+
+**What each role can do in the dashboard.**
+
+| | Super admin | Owner | Admin | Member |
+| --- | :---: | :---: | :---: | :---: |
+| See Analytics, Responses, the report | All companies | Own company | Own company | Own company |
+| Switch Demo and Live, close notices (own screen) | Yes | Yes | Yes | Yes |
+| Choose which company is in view | Yes | No | No | No |
+| Write, edit and send reports, inform submitters | Yes | Yes | Yes | No |
+| Change settings (country, pricing, branding, email, template, own keys) | Yes | Yes | Yes | No |
+| Load and remove sample data | All companies | Own | Own | No |
+| Add, remove and change people | Anyone, any company | Own company | No | No |
+| Create, close and share companies; Companies card | Yes | No | No | No |
+| Change the keys and template other companies share | Yes | No | No | No |
+
+### 3.3 The accounts set up for testing
+
+These accounts were created while the platform was tested end to end. Their passwords are deliberately **not written in this guide**, because the guide is kept in the project repository. They are held by Oliver Wainaina; change them on first use.
+
+| Person | Email | Role | Company | Used to check |
+| --- | --- | --- | --- | --- |
+| Caroline Muito | `caroline.muito@test.com` | Super admin | Rejuvenate Responsibly - Kenya (the installation's own company) | The global view, the Companies card, the shared keys and template, sample data across companies, moving between Demo and Live and between companies |
+| Tongai Bhebhe | `Tongai.Bhebhe@test.com` | Owner | Rejuvenate Responsibly - Zimbabwe | A company that sees only its own work, the set-up banners when sharing is off, adding a member to a company |
+
+The two companies are named "Rejuvenate Responsibly - Kenya" and "Rejuvenate Responsibly - Zimbabwe". Both are marked **Sample** (Section 12.9): they exist to demonstrate the platform, and their records show in Demo only. There is no seeded member account; add one from Settings, Team to see the read-only view.
 
 ---
 
@@ -136,13 +213,13 @@ Administrator reviews, edits, and sends the final report
 
 ### 4.2 Step by step
 
-**Step 1. Choosing a tier.** On the Rate My Impact page the client sees three tiers. Essential and Professional are bought online. Enterprise is quoted, so it leads to the contact form.
+**Step 1. Choosing a tier.** On the Rate My Impact page the client sees three tiers. Essential and Professional are bought online. Enterprise is quoted, so it leads to the contact form. The names, prices and contents of the tiers are the firm's to change (Section 9.1).
 
 **Step 2. Entering details.** The client gives the organisation name, their own name and a work email. This is enough to open the assessment.
 
 **Step 3. The reference is emailed straight away.** Before payment, the system creates the assessment and emails the client their reference and private link. This is deliberate: if anything goes wrong at the payment page, they still have a way back in.
 
-**Step 4. Payment.** The client is sent to Pesapal to pay. When they return, a page confirms the payment (it may take a few moments to settle) and offers "Start my assessment".
+**Step 4. Payment.** The client is sent to Pesapal to pay (or, while testing with the payment switch off, goes straight on). When they return, a page confirms the payment (it may take a few moments to settle) and offers "Start my assessment".
 
 **Step 5. Answering the questions.** All 53 questions are on one page, grouped into four pillars, with a progress bar. Answers save automatically. The client can leave and return on any device using the emailed link, or by entering their reference on the resume page.
 
@@ -182,7 +259,7 @@ Payment has its own state, covered in Section 9.
 | **Rate My Impact** | Explains the assessment, shows pricing, and starts it |
 | **Glossary** | Plain-English definitions of the terms used in the questions |
 | **Resume** | Enter a reference to get the private link emailed again |
-| **Contact** | Enquiry form, goes to the firm's inbox |
+| **Contact** | Enquiry form, goes to the firm's inbox, whose address is set in Settings, Website |
 
 ### The five services
 
@@ -335,10 +412,12 @@ For each pillar, the report compares the client's own score with the stakeholder
 
 Enterprise is not sold online; "Start a conversation" leads to the contact form with the enterprise topic selected.
 
+**These are the starting tiers.** Each company sets its own in **Settings, Pricing**: the name, the price, the summary and what is included, one line per item. A tier with no price shows as quoted, and a tier can be hidden from the pricing page. Prices are shown in the company's currency (Settings, Organisation), which follows its country unless another is chosen.
+
 ### 9.2 How a payment works
 
 1. The client enters their details and presses Pay.
-2. The platform opens an order with **Pesapal** (the payment provider) and sends the client to Pesapal's secure page.
+2. The platform opens an order with **Pesapal** (the payment provider), using the company's own Pesapal account or the installation's shared one (Section 12.9), and sends the client to Pesapal's secure page.
 3. The client pays by card or mobile money.
 4. Pesapal sends the client back to a confirmation page and, separately, tells the platform the payment has settled.
 5. The platform never takes Pesapal's word from the return trip alone. It asks Pesapal directly for the true status before marking anything as paid.
@@ -355,11 +434,13 @@ Enterprise is not sold online; "Start a conversation" leads to the contact form 
 
 ### 9.4 Sandbox and live
 
-Pesapal provides a test environment (the "sandbox") that moves no real money. The platform uses it until switched to **live**, which is done when the merchant account is approved. The switch is in Settings.
+Pesapal provides a test environment (the "sandbox") that moves no real money. The platform uses it until switched to **live**, which is done when the merchant account is approved. The switch is in Settings, Pricing, for the company that owns the account.
 
 ### 9.5 If payment is not set up
 
-If Pesapal credentials are missing, the Pay button says plainly that card payment is not switched on and invites the client to contact the firm for an invoice. Nothing is a dead end. The client's reference is still emailed.
+If Pesapal credentials are missing, the Pay button says plainly that card payment is not switched on and invites the client to contact the firm for an invoice. Nothing is a dead end. The client's reference is still emailed. A company that has switched sharing off and not yet added its own Pesapal account sees a set-up banner in Live (Section 12.7).
+
+While the **Require payment** switch is off (Section 13.8), the Pay buttons read "Start assessment" and the assessment opens without payment, marked "waived".
 
 ---
 
@@ -586,49 +667,92 @@ Email goes through **Mailtrap**. It has two modes:
 - **Testing:** every message is caught in a private test inbox and nothing reaches a real person. Used while the system is being tried out.
 - **Live:** messages are delivered for real from the verified sending domain.
 
+In **Settings, Email** a master **Send email** switch and a switch for each kind of email decide what goes out at all, and **See template** shows the wording as it will read (Section 13.7). Team invitations can be switched off too, leaving a password set by hand as the only way to add someone.
+
 If no mail account is connected at all, nothing is sent. The system says so on screen instead of pretending, and shows the client their link to copy by hand.
 
 ### 11.8 If an invitation does not arrive
 
-Each stakeholder invitation is sent **once** and is not retried. The platform records whether it was delivered. If not, the administrator is alerted (Section 12.6) and can tell the client using the editable notice above. There is currently no "resend" button; the client replies with a corrected address, or passes the link on themselves.
+Each stakeholder invitation is sent **once** and is not retried. The platform records whether it was delivered. If not, the administrator is alerted (Section 12.8) and can tell the client using the editable notice above. There is currently no "resend" button; the client replies with a corrected address, or passes the link on themselves.
 
 ---
 
 ## 12. The admin dashboard
 
-The dashboard is for the Rejuvenate team only, at the address `/dashboard` on the website.
+The dashboard is for the firm's own people, at the address `/dashboard` on the website. What each person sees depends on their role (Section 3.2) and on two switches that belong to them: Demo or Live, and which companies they are looking at.
 
 ### 12.1 Signing in
 
-- Administrators sign in with an email address and password.
-- **Sign in with Google** is shown but switched off, marked "Coming soon".
-- **Signing in is not enough.** An account must also be on the approved administrators list. A person who has an account but is not on the list is turned back with a clear message. If anything about the check is unclear, the answer is no.
-- Adding an administrator is done by adding their account to that list in the database.
+- Dashboard users sign in with an email address and password.
+- There is **no Google sign-in and no public sign-up page**. The way in is an email address and a password, and only for people already on the list.
+- **Signing in is not enough.** An account must also be on the approved list for the dashboard. A person who has an account but is not on the list is turned back with a clear message. If anything about the check is unclear, the answer is no.
+- People are added from **Settings, Team** (Section 12.10). New people are emailed a link to choose their own password, or given a password by the person adding them.
 
-### 12.2 Navigation
+### 12.2 The top bar
 
-The dashboard has its own top bar, separate from the public site:
+The bar is kept quiet. From left to right:
 
-- **Back to website** at the far left, before the logo. On the report editor this button changes to **Back** and returns to the organisation being edited.
-- The logo and "Dashboard" label.
+- The logo, which returns to Analytics.
 - **Analytics**, **Responses**, **Settings**.
-- The administrator's name and **Sign out**.
+- The **Demo / Live** switch (Section 12.3).
+- The **bell** (Section 12.7), with a count of what needs attention.
+- The **account menu**: the round button with the person's initials.
 
-**Admin banner on the public site.** If an administrator is signed in and visits the public website, a small banner at the bottom says they are signed in as an administrator and offers "Open dashboard". It can be dismissed for the session, and does not appear on the dashboard or sign-in pages.
+The account menu holds the name, email and role, then the choices that do not belong on every page:
 
-### 12.3 Analytics
+- For a **super admin** only: **Companies shown**, with an **All / Own** switch and a company picker listing every company (their own marked "yours"). This is the only place on the dashboard where the company in view is chosen. Pages simply follow it.
+- **View the website** and **Sign out**.
 
-Totals across every organisation:
+**Banner on the public site.** When someone on the dashboard list is signed in and visits the public website, a small banner at the bottom says so and offers **Open dashboard**. It can be dismissed for the session, and does not appear on the dashboard or sign-in pages.
+
+![The account menu of a super admin: role, All or Own, and the company picker](screenshots/account-menu.jpg)
+*The account menu of a super admin: role, All or Own, and the company picker*
+
+### 12.3 Demo and Live
+
+Every person starts on **Demo**. The switch moves them between two views of the same platform:
+
+| | Demo | Live |
+| --- | --- | --- |
+| **Shows** | Only the sample submissions | Only real clients |
+| **Set-up banners** | Switched off. A missing key is a fact about the live platform, not something to put in front of a prospect | Shown |
+| **Strip under the bar** | A line saying Demo is on and sample data only is showing | None |
+| **Sample companies** | Shown | Hidden |
+
+Switching moves nothing and deletes nothing. It only changes what is on that person's screen.
+
+![Analytics in Demo: the Demo strip under the bar, the totals and the notifications card](screenshots/analytics-demo.jpg)
+*Analytics in Demo: the Demo strip under the bar, the totals and the notifications card*
+
+### 12.4 What is remembered between sign-ins
+
+How a person last left the dashboard is saved **on their own account**, not in the browser, so it survives signing out and signing in again, and follows them to another browser:
+
+- Demo or Live.
+- For a super admin: all companies, their own, or a specific company.
+- Which set-up banners they closed.
+
+Nobody else's view is touched. A person who has never changed anything starts on Demo, with a super admin looking at all companies.
+
+### 12.5 Analytics
+
+Totals across every organisation **in view**:
 
 - Organisations, submitted, paid (real payments only), stakeholders invited, responses received, reports written.
 - A banner if any stakeholder invitations did not arrive, listing the organisations affected and whether the client has been told.
+- The **Notifications and recent activity** card (Section 12.7).
 - Charts: average score for each pillar, how many organisations are in each tier, assessments started and submitted by month, and the topics most often answered "no".
+- For a super admin, a **Companies** card at the very bottom: each company with its assessments, submissions and people. It follows Demo and Live, so Demo lists the sample companies and Live the real ones.
 
-### 12.4 Responses
+![The Companies card at the bottom of Analytics, after the charts](screenshots/companies-card.jpg)
+*The Companies card at the bottom of Analytics, after the charts*
 
-A list of every organisation showing sector, when it started, status, payment, score and tier, stakeholders answered out of invited, and report state. Organisations with undelivered invitations are flagged in red.
+![The same dashboard in Live: only real work, and the set-up items the company still has to finish](screenshots/analytics-live.jpg)
+*The same dashboard in Live: only real work, and the set-up items the company still has to finish*
 
-### 12.5 The organisation page
+### 12.6 Responses
+
+A list of every organisation in view showing sector, when it started, status, payment, score and tier, stakeholders answered out of invited, and report state. Organisations with undelivered invitations are flagged in red. When a super admin has all companies in view, a **Company** column says whose each row is. The spreadsheet export follows the same view.
 
 Opening an organisation shows:
 
@@ -638,71 +762,210 @@ Opening an organisation shows:
 - **Parties involved**: each stakeholder with name, email, relationship, when invited, whether the email was delivered, whether they answered, and their score.
 - **Pillar scores** and a chart comparing the client's view with the stakeholders'.
 - **Where the weight sits**: the heaviest gaps.
-- **The report**: the text, who and what wrote it, when edited and when sent, with **Edit report** and **Send report** (or **Write report now** if there is none).
+- **The report**: the text, who and what wrote it, when edited and sent, with **Edit report** and **Send report** (or **Write report now** if there is none).
 
-### 12.6 Delivery problems
+**A reference is not a permission.** Every page and every action on an assessment checks that it belongs to the company in view. Another company's reference answers exactly as if it did not exist, so codes cannot be probed.
+
+![Responses with the Company column, shown when a super admin has all companies in view](screenshots/responses.jpg)
+*Responses with the Company column, shown when a super admin has all companies in view*
+
+### 12.7 Notifications and recent activity
+
+Two places say what needs attention: the bell in the bar and the card on Analytics.
+
+**The card** has three tabs:
+
+- **Needs you**: what is waiting on the person, each with a button that goes straight to it (a key not set up, reports waiting to be sent, invitations that did not arrive, reports about to expire).
+- **New**: what happened since they signed in, plus what they missed since their last visit, marked "While you were away".
+- **All activity**: the last 30 days, grouped by day, with times such as "5 min ago". When more than one company is in view, each row names its company.
+
+**The set-up banners** at the top of every Live page cover what is not set up: payments, report writing, the report template. Each has a **close button**. Closing is saved on the person's account (Section 12.4) and the notice stays closed while the same thing is still wrong. The item stays in the card until it is fixed. When OpenRouter credits run out, the company's admin is told on the dashboard.
+
+### 12.8 Delivery problems
 
 When a stakeholder invitation fails to arrive (a typo in the address, a rejected mailbox, or no mail account connected at the time), the administrator is told in three places: the Analytics page, the Responses list and the organisation page.
 
 Pressing **Inform the submitter** opens the message in an editor, prefilled with the failed addresses and their survey links. The administrator can change the subject and the body. It is sent exactly as written, only to the submitter's own address on the assessment, and the invitations are then marked as "submitter told" with the date. They stay flagged until the person actually answers.
 
-### 12.7 Editing a report
+### 12.9 Companies
 
-The editor opens as a **full page**. The dashboard's top bar stays in place, with **Back** at the far left returning to the organisation, and the document fills everything beneath it, edge to edge and to the bottom of the screen, resizing with the window. Nothing frames it: there is no heading, no footer and no status bar under the page.
+Settings, **Companies** (super admin only) lists every company on the installation with its people, its assessments and what it is ready to use.
 
-The **Save report** button and a "Saved at" note sit in the top bar, next to the name of the organisation being edited, so they are always in reach.
+- **Create or close a company.** A closed company keeps its data and stops taking new assessments.
+- **Sample.** A company marked Sample is for demonstrating: its records show in Demo only, and its name carries a Sample badge. The two seeded companies are marked this way.
+- **Sharing.** For each company, three things can be shared with the installation: the **payment account (Pesapal)**, the **report-writing key (OpenRouter)** and the **report template**. All three are shared by default, so a new company works from its first day. Switching one off means that company's own admins must set up their own, and until they do, their dashboard shows a banner saying what is missing and to configure it or contact the administrator.
+- **View.** A super admin can step into a company to use the platform as its owner does, from the account menu.
 
-The original generated text is always preserved underneath. Saving replaces what the reader sees, marks the report as issued, and records who edited it and when.
+![Settings, Companies: choosing where to work](screenshots/settings-companies.jpg)
+*Settings, Companies: choosing where to work*
 
-### 12.8 Sample submissions
+![The sharing ticks for each company, and the sample badge](screenshots/companies-sharing.jpg)
+*The sharing ticks for each company, and the sample badge*
 
-Settings includes a **Sample submissions** switch that loads 16 invented organisations so the dashboard, report flow and edge cases can be tried without real clients. Each carries a **Sample** status badge, shown beside its name in the Responses list, on its organisation page and in the delivery alert, so it can never be mistaken for a real client. The organisation names themselves are plain, with no prefix. They cover:
+### 12.10 Team
 
-- every payment state (unpaid, pending, failed, waived, paid);
-- all four tiers, including a perfect score and a zero score;
-- every stage of stakeholder response, from none to all five;
-- every report state (none, draft, issued, sent), including a report sent with answers outstanding;
-- delivery failures, with and without the submitter told;
-- awkward inputs: blank fields, an organisation name containing symbols and accents, a very long name, a perfectly split vote;
-- the unpaid submission that the free preview allows.
+Settings, **Team** lists everyone who can open the dashboard.
 
-**The switch.** Turning it **on** loads the samples. Turning it **off** asks for confirmation and then removes every sample submission, along with their invitations, responses and reports. Real submissions are never touched, because only records flagged as samples are removed. A **Reset the samples** button puts them back to their original state after experimenting.
+- An **owner** (or super admin) can **Add someone**: email, optional name, **role** (Member, Admin, Owner, and for a super admin, Super admin) and how they get in (an emailed link to set their own password, or a password the owner sets and passes on; it is never emailed).
+- A super admin also chooses the **company**, and can change a person's company or role from a dropdown on their row. An owner's additions join the owner's company.
+- Other actions per person: **Resend the link**, **Set a password**, **Remove**. Removing ends access at once; the account itself is kept so adding them back is one step.
+- Guard rails: the last super admin and the last owner of a company cannot be removed or demoted, and nobody can remove or step down themselves.
+- Admins and members see the list but cannot change it.
 
-**Why some names look odd.** One sample, RMI-SMP013, is deliberately given an organisation name full of symbols and accents (an ampersand, angle brackets, quotation marks) and blank contact fields. It exists to prove that unusual names display and print correctly, so its report title looks strange on purpose. Another is deliberately very long. Anything carrying the Sample badge disappears when the switch is turned off.
+![Settings, Team: the role dropdown (Member, Admin, Owner, Super admin) with what each can do](screenshots/team-roles.jpg)
+*Settings, Team: the role dropdown (Member, Admin, Owner, Super admin) with what each can do*
 
-**Safety.** All sample email addresses are on example.org, which cannot receive mail, and no email is sent when they are loaded. Sample submissions appear in Analytics, the Responses list and the delivery alert like any other, so switch them off before judging real figures.
+### 12.11 Editing a report
+
+The editor opens as a **full page**. The dashboard's top bar stays in place, with **Back** at the far left returning to the organisation, and the document fills everything beneath it, edge to edge and to the bottom of the screen, resizing with the window.
+
+The **Save report** button and a "Saved at" note sit in the top bar, next to the name of the organisation being edited. The original generated text is always preserved underneath. Saving replaces what the reader sees, marks the report as issued, and records who edited it and when.
+
+### 12.12 Sample data
+
+Settings, **Sample data** loads invented organisations so the dashboard, report flow and edge cases can be tried without real clients. Each carries a **Sample** badge beside its name.
+
+- **Per company.** Samples are shared out between the sample companies, so each company shows its own different handful rather than the same sixteen. Loading, counting and clearing work on the companies in view: a super admin with all companies in view loads and clears them all; anyone else, or a super admin inside one company, affects only that company. Other companies' samples and every real record are left exactly as they were.
+- **Coverage.** Between them they cover every payment state, all four tiers (including a perfect and a zero score), every stage of stakeholder response, every report state, delivery failures with and without the submitter told, and awkward inputs such as blank fields, symbols and accents, a very long name and a perfectly split vote.
+- **Why some names look odd.** One sample, RMI-SMP013, is deliberately given an organisation name full of symbols and accents (an ampersand, angle brackets, quotation marks) and blank contact fields. It exists to prove that unusual names display and print correctly, so its report title looks strange on purpose. Another is deliberately split down the middle to test a tied vote.
+- **Reset.** **Reset the samples** puts them back to their starting state after they have been edited.
+- **Viewing.** Samples show only in **Demo**. There is no separate hide switch; Live simply does not show them.
+- **Safety.** All sample email addresses are on example.org, which cannot receive mail, and no email is sent when they are loaded.
 
 ---
 
 ## 13. Settings, secrets and test controls
 
-Settings (in the dashboard) gathers everything that previously needed a developer to change.
+Settings (in the dashboard) gathers everything that previously needed a developer to change. It is organised in **tabs**, one subject at a time. The tabs shown depend on the role: Companies is for the super admin, and a member sees the others read-only.
 
 ### 13.1 What can be set
 
-| Group | Setting | Notes |
+| Tab | What it holds | Notes |
 | --- | --- | --- |
-| **Storage** | Shows which store is active and whether the database is ready | Also offers a one-off import (Section 14) |
-| **Testing** | **Require payment before an assessment** (on or off) | Turn off for testing. Assessments opened while off are marked "waived" and never counted as paid. Switch back on before launch |
-| **Payments (Pesapal)** | Consumer key, consumer secret, environment (sandbox or live), optional IPN id | Keys are write-only |
-| **Report writing (OpenRouter)** | API key, drafting model, humaniser model | Models are chosen from a dropdown with prices, or typed |
-| **Samples** | A switch that loads or removes the sample submissions | Off removes every sample, and only samples |
+| **Organisation** | Country and currency | The country sets the currency unless another is chosen. Everything priced follows it: the tiers on the website, what a report costs to write, what a client is charged |
+| **Website** | Contact details and social links shown on the public site | Includes the inbox address that receives contact-form enquiries |
+| **Branding** | The company's logo and stamp | Used on reports. Colours taken from the logo change only that company's dashboard |
+| **Pricing** | The tiers and, where the company has its own account, the payment keys | Pesapal consumer key, consumer secret, environment (sandbox or live), optional IPN id. Keys are write-only |
+| **Report writing** | The OpenRouter key, the drafting model and the humaniser model | Models chosen from a dropdown with prices, or typed. Shown only when the company uses its own key |
+| **Report template** | The letterhead and footer every report is wrapped in | Section 13.6 |
+| **Email** | The master email switch, a switch for each kind of email, and a **See template** preview for each | Section 13.7 |
+| **Team** | Who can open the dashboard, with roles and companies | Section 12.10 |
+| **Sample data** | Loads, counts and removes sample submissions | Section 12.12 |
+| **Companies** | Every company, with sharing, sample flag and readiness | Super admin only. Section 12.9 |
 
-### 13.2 Choosing models
+The earlier **Testing** switch, **Require payment before an assessment**, remains in Pricing. Turn it off for testing: assessments opened while it is off are marked "waived" and never counted as paid. Switch it back on before launch.
 
-Each model dropdown lists a curated set of models with their price per million tokens (a token is roughly three-quarters of a word). Prices are taken live from OpenRouter and refreshed hourly; if they cannot be reached, built-in figures are used and the page says so. A model can also be typed in by name.
+All dropdowns on these pages are drawn in the dashboard's own style, with keyboard support (arrows, Home, End, Enter, Escape, and typing a letter to jump), rather than the browser's own list.
 
-Beneath the dropdowns a box shows the **average cost per report** for the chosen pair, the cost per 1,000 reports, the earlier setup for comparison, and the assumptions behind the estimate.
+#### Who can do what in Settings
+
+Every tab below follows the same rule. **Super admin, owner and admin can change it; a member can only look.** What differs is whose settings they are changing, and the three things that only some roles can reach: the Team tab's controls, the Companies tab, and the keys and template that other companies share.
+
+| Tab | Super admin | Owner | Admin | Member |
+| --- | --- | --- | --- | --- |
+| Organisation, Website, Branding, Pricing, Report writing, Email | Change, for the company in view | Change, for their company | Change, for their company | Look only |
+| Report template | Change; also edits the template other companies share | Change when their company has its own template | Change when their company has its own template | Look only |
+| Team | Add, move and remove anyone, in any company | Add, remove and re-role their company's people | List only | List only |
+| Sample data | Load and clear for all companies or one | Own company | Own company | Look only |
+| Companies | Everything | Tab not shown | Tab not shown | Tab not shown |
+
+**How the roles relate inside Settings.** The super admin sets the rules that the others work within: which companies exist, which of them share the installation's payment account, report-writing key and template, and who the owners are. An owner then runs their own company inside those rules and is the only one besides the super admin who can change who has access. An admin does the daily configuration but cannot change who has access. A member sees all of it and changes none of it, and the server refuses their saves even if the page were somehow opened for them.
+
+**Where a company shares the installation's keys,** its Pricing and Report writing tabs hide the key fields, since there is nothing for its people to fill in. Switching a share off in Companies (super admin) makes the fields appear for that company's owner and admins, and shows them a set-up banner until they are filled.
+
+#### Organisation
+
+Country and currency. The country sets the currency unless another is chosen, and everything priced follows it: the tiers on the website, what a report costs to write and what a client is charged. Super admin, owner and admin change it for their company; a member sees it. A company in another country is simply a company with a different setting here.
+
+![Settings, Organisation: country and currency](screenshots/settings-organisation.jpg)
+*Settings, Organisation: country and currency*
+
+#### Website
+
+The public site's contact details: email, location, WhatsApp, any number of phone numbers, and the social pages shown in the footer, in the order set here. It also holds the inbox that receives contact-form enquiries. Anything cleared falls back to the server's settings or to nothing. The same roles as above change it, and the changes are saved for the company in view.
+
+![Settings, Website: contact details and social pages](screenshots/settings-website.jpg)
+*Settings, Website: contact details and social pages*
+
+#### Branding
+
+The company's **logo** and **stamp**, and the dashboard colours taken from the logo. The logo and stamp go on every report that company issues; where they sit on the page is decided in the report template (Section 13.6). The colours change that company's own dashboard only and never touch a report. Every company has its own logo and stamp, even one that shares the installation's template.
+
+![Settings, Branding: the logo, the stamp and the dashboard colours taken from the logo](screenshots/settings-branding.jpg)
+*Settings, Branding: the logo, the stamp and the dashboard colours taken from the logo*
+
+#### Pricing
+
+Three things, top to bottom.
+
+1. **The tiers.** Name, price, summary and what is included for each, with a tick to hide a tier from the pricing page. A tier with no price shows as quoted.
+2. **Testing.** The **Require payment** switch (Section 13.8).
+3. **Payments (Pesapal).** Consumer key, consumer secret, environment (sandbox or live) and an optional IPN id. The keys are write-only. These fields appear only for a company that uses its **own** Pesapal account. A company on the shared account sees nothing here, and the super admin, who holds the shared account, sees the fields for it.
+
+The tiers belong to each company, so Kenya and Zimbabwe can price in their own currencies without touching each other.
+
+![Settings, Pricing: the tiers and what each includes](screenshots/settings-pricing.jpg)
+*Settings, Pricing: the tiers and what each includes*
+
+![Settings, Pricing: the payments account and its environment](screenshots/settings-pesapal.jpg)
+*Settings, Pricing: the payments account, with the keys write-only and the sandbox as the default*
+
+#### Report writing
+
+The OpenRouter key and the two models that write a report: the **drafting model** and the **humaniser model**. Each dropdown lists a curated set of models with their price per million tokens (a token is roughly three-quarters of a word). Prices come live from OpenRouter, refreshed hourly; if it cannot be reached, built-in figures are used and the page says so. A model can also be typed in by name. Beneath them a box shows the **average cost per report** for the chosen pair, in the company's currency, with the cost for 1,000 reports, the earlier set-up for comparison and the assumptions behind the estimate.
+
+The key field is for a company with its **own** key. A company on the shared key shows nothing to fill in, and when the shared credit runs out its admins are told (Section 13.5). Whoever pays for the key is whoever owns it: the super admin for the shared one, each company for its own.
+
+![Settings, Report writing: the key and the two models](screenshots/settings-report-writing.jpg)
+*Settings, Report writing: the key and the two models*
+
+![Settings, Report writing: what a report costs with the chosen models](screenshots/settings-report-writing-cost.jpg)
+*Settings, Report writing: what a report costs with the chosen models*
+
+#### Report template
+
+The letterhead and footer every report is wrapped in, shown as the report's own pages, with the logo and stamp placement. Section 13.6 covers it in full. A company on the shared template sees an explanation instead of the editor, and its owner and admin edit the template only once the super admin has switched sharing off.
+
+#### Email
+
+The master **Send email** switch, a switch for each kind of email, and **See template** under each. Section 13.7 covers it in full. The switches are saved for the company in view; the mail account itself is set on the server.
+
+#### Team
+
+Opens the Team page (Section 12.10): who can open the dashboard, with their roles and companies. An owner (or super admin) adds, re-roles and removes people; an admin or member sees the list. The relationships between the roles are in Section 3.2.1.
+
+#### Sample data
+
+Loads, counts and clears the invented organisations (Section 12.12). It follows Demo and Live: samples are shown only in Demo. A company's owner or admin loads and clears only that company's samples; a super admin with all companies in view does so for all of them.
+
+![Settings, Sample data: the on switch, counts and the cases the samples exercise](screenshots/settings-sample-data.jpg)
+*Settings, Sample data: the on switch, counts and the cases the samples exercise*
+
+#### Companies
+
+Super admin only (Section 12.9): every company, with its link, people, assessments, whether it is a sample, and the three sharing ticks. Nobody else is told this tab exists.
+
+#### When the database is not ready
+
+If the database has not had its migration applied, every tab shows a **Storage** card instead of its form. It says which store is active, whether the database is ready, and how many records it holds, and offers a one-off import of earlier data (Section 14). Once the database is ready the card is no longer shown.
+
+### 13.2 Whose settings these are
+
+Most settings belong to **one company**: the one the person is working in. A super admin looking at all companies is saving against their own company, since a save has to go somewhere. The keys that the whole installation shares live on the installation's own company, and its admins and the super admin can change them.
+
+By default every other company borrows the installation's payment account, report-writing key and template (Section 12.9). Where sharing is switched off for a company, that company's owner or admin sets their own, and the settings pages show their own fields instead of the shared ones.
+
+**Choosing models.** Each model dropdown lists a curated set of models with their price per million tokens (a token is roughly three-quarters of a word). Prices are taken live from OpenRouter and refreshed hourly; if they cannot be reached, built-in figures are used and the page says so. Beneath the dropdowns a box shows the average cost per report for the chosen pair.
 
 ### 13.3 Where a value can come from
 
 For each setting, the platform looks in this order and uses the first it finds:
 
-1. A value **saved in the dashboard**.
-2. A value in the **server's environment settings** (set by whoever manages the server).
+1. A value **saved in the dashboard** for that company.
+2. For the installation's own company only, a value in the **server's environment settings**.
 3. A **built-in default**.
 
-So a dashboard value always wins, and removing it hands control back to the server's settings. Either route is fine.
+A company that is not the installation's own never falls back to the environment keys: either it is sharing the installation's, or it must set its own. That keeps one firm's usage from silently running up another's bill.
 
 ### 13.4 How secrets are protected
 
@@ -712,9 +975,55 @@ So a dashboard value always wins, and removing it hands control back to the serv
 - Without the master key, the dashboard refuses to save secrets (the server's own settings keep working).
 - If the master key is lost or changed, saved secrets become unreadable and must be entered again. Nothing else is affected.
 
-### 13.5 The test switch, in practice
+### 13.5 When OpenRouter credits run out
 
-1. Settings, Testing: switch **Require payment** off.
+OpenRouter answers a request with a "payment required" error when the balance is empty. The platform records the time against the company that used the key, and shows the company's admin a notice that report writing is paused until credits are added. The notice clears once a report is written successfully again. A company on the shared key sees the installation's state; a company with its own key sees its own.
+
+### 13.6 The report template
+
+Settings, **Report template** opens on the report itself: a **sample report**, shown as its pages side by side, shrunk to fit the width so nothing scrolls sideways, and always at least **two pages**. Clicking a page opens it larger in a popup, with Previous, Next and Escape. The sample is a full report (summary, one section per pillar, how stakeholders see it, what to do first, a roadmap and the basis of the report), so the pages show how a real one fills out.
+
+- **Edit template** switches the editor on. While it is open the toolbar offers **Open a document** (Word, OpenDocument, RTF, HTML, Markdown or text; a PDF cannot be opened for editing), **Refresh pages**, **Save draft**, **Discard draft** and **Publish**. Closing the editor keeps the work.
+- **Nothing a client sees changes until the template is published.** The page says whether the live template is the built-in one or the company's own, and shows a saved draft.
+- A template needs `{{report}}` where the writing goes. Other placeholders fill in the organisation, reference, tier, score, dates, expiry notice and the firm's name, email and location. The list is beside the editor and can be clicked to copy.
+- A company that shares the installation's template sees an explanation instead of the editor; its own logo and stamp still go on the shared template.
+
+**Logos and stamp.** Three images can appear on a report, and a panel above the pages shows where each prints and moves it:
+
+| Image | Where it comes from | Notes |
+| --- | --- | --- |
+| **Your logo** | Uploaded under Branding | Prints wherever `{{logo}}` is placed |
+| **The client's logo** | The client, optionally, on their assessment form | Prints wherever `{{client_logo}}` is placed. Reports whose client added none show nothing there. If the template has no `{{client_logo}}`, a logo a client adds will not appear on their report, and the panel warns of this |
+| **Your stamp** | Uploaded under Branding | Prints wherever `{{stamp}}` is placed |
+
+Each has a dropdown: **Top of the first page**, **Bottom of the last page**, or **Not shown**. Changing one edits the template and redraws the pages, then appears as an unsaved draft to save and publish. **Mark them on the pages** draws a dashed, labelled frame around each image in the preview (with a grey stand-in where nothing is uploaded yet), so the position can be seen. The frames are only in the preview; a real report prints the images and nothing else.
+
+![Report template: the Logos and stamp panel above the report pages, with dashed frames marking each image](screenshots/template-logos-pages.jpg)
+*Report template: the Logos and stamp panel above the report pages, with dashed frames marking each image*
+
+![Clicking a page opens it larger, with Previous and Next](screenshots/template-page-popup.jpg)
+*Clicking a page opens it larger, with Previous and Next*
+
+### 13.7 Emails and their templates
+
+Settings, **Email** has a master **Send email** switch and a switch for each kind of email: assessment link, stakeholder invitations, report ready, delivery notices, team invitations and contact-form enquiries. Under each is **See template**.
+
+**See template** opens the message in a window as it will read, with every detail that changes from one message to the next (organisation, reference, links, names) picked out as a highlighted field, and a list of those fields beneath. A **Desktop / Mobile** switch shows it at both widths. The wording shown is built by the same code that sends the email, so it cannot drift from the real thing.
+
+If the sending domain at the mail provider has not completed its company information, mail is refused even when the DNS records are all correct. That has to be completed in the provider's own account.
+
+![Settings, Email: a switch for each kind of email, with See template under each](screenshots/email-list.jpg)
+*Settings, Email: a switch for each kind of email, with See template under each*
+
+![See template, Desktop: the variable details are highlighted](screenshots/email-desktop.jpg)
+*See template, Desktop: the variable details are highlighted*
+
+![See template, Mobile](screenshots/email-mobile.jpg)
+*See template, Mobile*
+
+### 13.8 The test switch, in practice
+
+1. Settings, Pricing: switch **Require payment** off.
 2. On the Rate My Impact page the Pay buttons now read **Start assessment**.
 3. The client details are collected, the reference is emailed, and the person goes straight into the assessment.
 4. The dashboard shows "Payment waived" for these.
@@ -730,12 +1039,14 @@ Submissions, stakeholder responses, reports and settings are stored in **Supabas
 
 | What | Contents |
 | --- | --- |
-| Administrators | The approved list |
+| Dashboard users | The approved list: each person's role and company. How they last left the dashboard (Demo or Live, company in view, closed notices) is kept on their own account |
+| Companies | Each company on the installation, whether it is a sample, and what it shares with the installation |
 | Assessments | Organisation, contact, answers, score, payment details, dates |
 | Invitations | Each stakeholder, their private link, whether it was delivered, whether they answered, whether the submitter was told |
 | Stakeholder responses | Each outside answer set and score |
 | Reports | The current text, the original generated text, the models used, who edited and sent it, when |
-| Settings | One record; secrets inside are already encrypted |
+| Settings | One record per company; secrets inside are already encrypted |
+| Report templates | A draft and a published version for each company |
 
 ## 15. Security and privacy
 
@@ -743,12 +1054,16 @@ Submissions, stakeholder responses, reports and settings are stored in **Supabas
 | --- | --- |
 | **Private links** | Long, unguessable and tied to one assessment or one stakeholder. They work like passwords, and the emails say so |
 | **References** | Typing a reference alone opens nothing; the private link is required. The Resume page does not reveal whether a reference exists |
-| **Administrators** | Must be on the approved list. Checked on every page and every action. Unclear means no |
+| **Sign-in** | Email and password only. There is no sign-up page and no Google sign-in, so an account exists only because someone on the list added it |
+| **Dashboard users** | Must be on the approved list. Checked on every page and every action. Unclear means no |
+| **Companies** | Each sees only its own work. An assessment reference is checked against the company in view on every page and action, so another company's codes answer as if they did not exist |
+| **Members** | Read-only. Every route that saves, sends, uploads, deletes or generates refuses them on the server, not only in the interface |
 | **Secrets** | Encrypted before storage, write-only, never shown or sent back to the browser |
 | **Payment status** | Never taken from the return trip; always confirmed directly with Pesapal |
 | **Server key** | The privileged database key is server-only and is never exposed to the browser |
 | **Spam** | The contact form has a hidden field that catches automated submissions |
 | **Sample data** | Flagged and removable, with addresses that cannot receive mail |
+| **Saved view** | Each person's Demo or Live, company in view and closed notices are kept on their own account, and cannot be read or changed by anyone else |
 | **Reports** | State plainly that they are based on self-declared responses and are not an audit |
 
 ### A point to be aware of: anonymity
@@ -771,24 +1086,32 @@ The stakeholder invitation promises the person's answers are "never attributed t
 | 8 | **Report written automatically once everyone answers** | Removes a manual step and delivers quickly; the button remains for stakeholders who never answer |
 | 9 | **An administrator can send early, with a clear warning** | Real life: not everyone answers. The firm needs the choice, and the client needs the truth about what the report rests on |
 | 10 | **Two-stage writing: draft then humaniser** | Cheap models are good at structure but sound machine-written; a second pass fixes tone without a premium model |
-| 12 | **Move from premium to low-cost models** | Reports cost under one US cent instead of about four, with the same structure and checks |
-| 13 | **Models chosen from a dropdown with live prices** | Prices change often; people should see the cost before they choose |
-| 14 | **Secrets can be saved in the dashboard, encrypted, with the server settings as a fallback** | Rotate a key without a developer or a redeploy; keep the master key out of the database |
-| 15 | **A test switch that records "waived" rather than "paid"** | Testing must never inflate revenue figures or confuse the books |
-| 16 | **Sample data is flagged and removable** | Lets the team learn the dashboard on a live database without risk to real records |
-| 17 | **Storage on Supabase** | Data must survive restarts and moves between hosts, and the dashboard already uses Supabase for sign-in |
-| 18 | **Database changes are additive only** | The firm's data must never be altered by an update. Safe to repeat, safe on a populated database |
-| 19 | **Importing the old file only adds** | Cannot overwrite live records, and the original file is kept as a backup |
-| 20 | **Delivery results are recorded for every invitation** | Previously a failed email vanished silently and the client waited for a report that could never come |
-| 21 | **Admin tells the submitter, with editable wording** | A human decision with a human tone; the draft saves time but the administrator has the last word |
-| 22 | **Google sign-in disabled and labelled "Coming soon"** | Not configured yet; showing it working would mislead |
-| 23 | **Admin access needs a list entry, not just an account** | A stray sign-in must never expose every client's answers |
-| 24 | **Dashboard has its own navigation and a "Back to website" link** | The public header on top of the dashboard was confusing; administrators move between the two often |
-| 25 | **Admin banner on the public site** | Reminds an administrator they are signed in, and gives one click back |
-| 26 | **Public pages stay fast and static** | The banner asks the server on demand rather than making every page personal |
-| 27 | **Email through Mailtrap, with a test inbox mode** | Nothing reaches a real person until the team decides |
-| 28 | **No automatic retry or resend of stakeholder invitations** | Kept simple at launch; replaced by visibility plus a notice to the client (see Section 17) |
-| 31 | **Sample data is a single on and off switch, and every sample carries a Sample status badge** | Mock records must be unmistakable and removable in one move before real clients arrive, without any risk to real data. A status keeps names clean in reports and lists; a prefix put "[Sample]" in report titles |
+| 11 | **Move from premium to low-cost models** | Reports cost under one US cent instead of about four, with the same structure and checks |
+| 12 | **Models chosen from a dropdown with live prices** | Prices change often; people should see the cost before they choose |
+| 13 | **Secrets can be saved in the dashboard, encrypted, with the server settings as a fallback** | Rotate a key without a developer or a redeploy; keep the master key out of the database |
+| 14 | **A test switch that records "waived" rather than "paid"** | Testing must never inflate revenue figures or confuse the books |
+| 15 | **Sample data is flagged and removable** | Lets the team learn the dashboard on a live database without risk to real records |
+| 16 | **Storage on Supabase** | Data must survive restarts and moves between hosts, and the dashboard already uses Supabase for sign-in |
+| 17 | **Database changes are additive only** | The firm's data must never be altered by an update. Safe to repeat, safe on a populated database |
+| 18 | **Importing the old file only adds** | Cannot overwrite live records, and the original file is kept as a backup |
+| 19 | **Delivery results are recorded for every invitation** | Previously a failed email vanished silently and the client waited for a report that could never come |
+| 20 | **Admin tells the submitter, with editable wording** | A human decision with a human tone; the draft saves time but the administrator has the last word |
+| 21 | **Email and password only, no Google sign-in** | Fewer things to configure and go wrong, and the approved list is the real gate whichever way someone signs in |
+| 22 | **Admin access needs a list entry, not just an account** | A stray sign-in must never expose every client's answers |
+| 23 | **Dashboard has its own navigation and a "Back to website" link** | The public header on top of the dashboard was confusing; administrators move between the two often |
+| 24 | **Admin banner on the public site** | Reminds an administrator they are signed in, and gives one click back |
+| 25 | **Public pages stay fast and static** | The banner asks the server on demand rather than making every page personal |
+| 26 | **Email through Mailtrap, with a test inbox mode** | Nothing reaches a real person until the team decides |
+| 27 | **No automatic retry or resend of stakeholder invitations** | Kept simple at launch; replaced by visibility plus a notice to the client (see Section 17) |
+| 28 | **Every sample carries a Sample status badge** | Mock records must be unmistakable and removable before real clients arrive, without any risk to real data. A status keeps names clean in reports and lists; a prefix put "[Sample]" in report titles |
+| 29 | **Several companies on one installation, each seeing only its own work** | Firms in different countries can use one platform without seeing each other's clients. The installation's owner sees across them |
+| 30 | **Keys and template shared by default, switchable per company** | A new company works on its first day, and a company that needs its own account can have one without touching the others |
+| 31 | **A read-only member role, and the server refuses the writes** | Someone who only needs to look should not be able to change anything, and hiding a button is not a control |
+| 32 | **Demo and Live as a switch for each person, starting on Demo** | The platform can be shown without anything real or any "not set up" notices on screen, and nobody sees client data by accident |
+| 33 | **A person's view is saved on their account, not in the browser** | Closing a notice or choosing a company should still hold after signing out, and on another computer |
+| 34 | **Company choice lives in the account menu only** | It is a discreet setting for the super admin and should not clutter the dashboard; pages follow it |
+| 35 | **Logos are placed from the template, with a marked preview** | The firm can see where a client's logo will print before any client has added one |
+| 36 | **Email wording is previewed from the code that sends it** | What the preview shows cannot differ from what goes out |
 ---
 
 ## 17. Known limitations and things to reconcile
@@ -804,28 +1127,18 @@ These are honest gaps, collected in one place so they can be decided deliberatel
 | 5 | **Anonymity wording** | The invitation promises answers are not attributed by name; administrators can see names against scores | Align the wording with who can see what |
 | 6 | **No resend button** | A failed invitation can be reported and the client told, but the system cannot resend to a corrected address | Add "resend to corrected address" on the organisation page |
 | 7 | **Administrator edits skip the humaniser** | Only generated drafts are edited by the humaniser; a human's text is kept as written | Intended. Note for anyone editing |
-| 8 | **Google sign-in** | Shown, disabled, "Coming soon" | Configure in Supabase and Google, then enable |
+| 8 | **Prices are typed in, not converted** | The live exchange rate is used only to show what writing a report costs in the company's currency. Tier prices are entered by hand for each company, so changing the currency does not convert them | Re-enter the prices after changing a company's currency |
 | 9 | **Live payments** | Running against Pesapal's test environment | Switch to live when the merchant account is approved |
 | 10 | **Report is not an audit** | Stated on every report; clients may ask for assurance | Offer the validation call or the enterprise diagnostic |
-| 11 | **Single administrator role** | Everyone on the list can change settings, including payment credentials | Keep the list short; consider separate roles later |
-| 12 | **Placeholder images** | Several website images are generated placeholders | Replace with real photography at the same filenames |
+| 11 | **Roles are coarse** | Owners and admins can both change a company's settings, including its payment credentials. Only team changes are owner-only | Keep owners few. Finer roles can be added later |
+| 12 | **Member needs a database change** | The database's role check must allow `member`; the migration file has it, but an existing database needs the one statement run by hand | Run the role check statement from the migration in the Supabase SQL editor |
+| 13 | **Saved view needs the service key** | Demo or Live, the company in view and closed notices are saved with the server's service role key. Without it they cannot be kept | Keep `SUPABASE_SERVICE_ROLE_KEY` set on the server |
+| 14 | **Sample companies hide in Live** | If every company is marked Sample, Live shows nothing at all, and the Companies card is empty | Unmark a company as sample when it starts working with real clients |
+| 15 | **Placeholder images** | Several website images are generated placeholders | Replace with real photography at the same filenames |
 
 ---
 
-## 18. Going live: the launch checklist
-
-### Accounts you need
-
-| Account | What for |
-| --- | --- |
-| **Pesapal** | Taking payments (merchant approval required for live) |
-| **OpenRouter** | The AI models that write reports (a paid balance) |
-| **Mailtrap** | Sending email (verify the sending domain for live) |
-| **Hosting** | Vercel and a VPS
-
----
-
-## 19. Everyday tasks: how to
+## 18. Everyday tasks: how to
 
 **See what is going on.** Open the dashboard, then Analytics. A red banner means an invitation did not arrive.
 
@@ -837,21 +1150,35 @@ These are honest gaps, collected in one place so they can be decided deliberatel
 
 **Edit a report before it goes out.** Open the organisation, **Edit report**. The editor opens as a full page; make changes, **Save report**, then press **Back** to return to the organisation. The original is kept.
 
-**Test without taking payment.** Settings, Testing, switch off **Require payment**. Remember to switch it back on.
+**Test without taking payment.** Settings, Pricing, switch off **Require payment**. Remember to switch it back on.
 
 **Change which models write reports.** Settings, Report writing. Pick from the dropdowns and watch the cost box. Save.
 
 **Rotate a key** (Pesapal or OpenRouter). Settings, paste the new value into the field, Save. Tick "Remove the saved value" instead to hand control back to the server's settings.
 
-**Try the dashboard with data.** Settings, Sample submissions, switch on. When done, switch it off and confirm; every sample submission is removed and real records are left alone.
+**Try the dashboard with data.** Switch to **Demo** (top bar). Settings, **Sample data**, load. When done, remove them there; every sample in view is removed and real records are left alone.
 
-**Get rid of the mock data before launch.** Settings, Sample submissions, switch off. Then check Analytics: the totals should show only real organisations.
+**Get rid of the mock data before launch.** Settings, Sample data, remove (with all companies in view as a super admin, to clear every company). Then switch to **Live** and check Analytics: the totals should show only real organisations.
 
-**The dashboard shows nothing.** Open Settings and read the Storage card. It says which store is active, whether the database is ready, and how many records it holds. An empty database shows zeros; load the samples or import earlier data.
+**Add a member to a company.** Settings, Team, **Add someone**, role **Member**. A super admin picks the company; an owner's additions join the owner's company. They can look at everything in their company and change nothing.
+
+**Move someone to another company.** Super admin only. Settings, Team, the company dropdown on their row.
+
+**Look at another company's work.** Super admin only. Account menu (your initials), Companies shown: pick **All**, **Own**, or a company from the list. Analytics, Responses and the export follow.
+
+**Make a company use its own keys.** Super admin only. Settings, Companies, switch off sharing for what it should own. Its admin then sees a banner until they set up their own payment account, report-writing key or template.
+
+**A notice keeps coming back.** Close it with the cross. It is saved on your account and stays closed while the same thing is still wrong. The item remains on the Analytics card until it is fixed.
+
+**Move a logo on the report.** Settings, Report template, **Logos and stamp**: choose top, bottom or not shown, check the dashed frames on the pages, then **Save draft** and **Publish**.
+
+**See what an email looks like.** Settings, Email, **See template** under the email, then Desktop or Mobile.
+
+**The dashboard shows nothing.** Check you are on the right view first: in **Live** the sample companies and their records are hidden, and in **Demo** the real ones are. Then, if Settings shows a **Storage** card in place of its forms, the database is not ready: it says which store is active and how many records it holds. An empty database shows zeros; load the samples or import earlier data.
 
 ---
 
-## 20. References
+## 19. References
 
 **Frameworks and standards**
 
@@ -894,11 +1221,19 @@ These are honest gaps, collected in one place so they can be decided deliberatel
 
 ---
 
-## 21. Glossary
+## 20. Glossary
 
 | Term | Meaning |
 | --- | --- |
-| **Administrator** | A member of the Rejuvenate team on the approved list, with access to the dashboard |
+| **Administrator** | Anyone on the approved list with access to the dashboard. See Super admin, Owner, Admin and Member |
+| **Super admin** | The role that sees every company and holds the keys and template the others share |
+| **Owner** | A company's lead on the dashboard: works the company's submissions and manages its team |
+| **Admin** | Works a company's submissions and settings; does not manage the team |
+| **Member** | Read-only dashboard access to one company |
+| **Company** | One firm using the installation, with its own work, settings and team |
+| **Sharing** | A company borrowing the installation's payment account, report-writing key or template instead of its own |
+| **Demo / Live** | The two views of the dashboard: sample data and no set-up notices, or real data and notices |
+| **Sample company** | A company that exists to demonstrate the platform; its records show in Demo only |
 | **Assessment** | One organisation's 53-question self-assessment and everything attached to it |
 | **Coverage** | How much of the weighted list of practices the organisation says it has |
 | **Depth** | How much of that it can back with evidence |
@@ -1070,4 +1405,13 @@ Stakeholders answer the first-level yes or no only. Weights are within the stake
 
 ---
 
-*Rate My Impact: Solution Guide. Prepared by Oliver Wainaina for Rejuvenate Responsibly. Version 1.2, 14 October 2026.*
+## Document history
+
+| Version | Date | What changed |
+| --- | --- | --- |
+| 1.3 | 27 October 2026 | Screenshots of the dashboard. How the roles relate. The four dashboard roles (super admin, owner, admin, member) and the test accounts. Several companies on one installation, with sharing of keys and template. Demo and Live, and the saved view. The redesigned top bar and account menu. Notifications and recent activity. The Team page with companies and the member role. The report template shown as pages, with logo placement. Email previews. Per-company sample data. Themed dropdowns |
+| 1.2 | 14 October 2026 | Full-page report editor, sample submissions, guide v1.2 |
+
+---
+
+*Rate My Impact: Solution Guide. Prepared by Oliver Wainaina for Rejuvenate Responsibly. Version 1.3, 27 October 2026.*
